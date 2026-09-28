@@ -280,6 +280,8 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
         ? `
           html, body {
             overflow: hidden !important;
+            inline-size: 100% !important;
+            block-size: 100% !important;
             height: 100% !important;
             width: 100% !important;
             margin: 0 !important;
@@ -290,10 +292,13 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
             column-width: 100vw !important;
             column-gap: 0px !important;
             column-fill: auto !important;
+            inline-size: 100% !important;
+            block-size: 100% !important;
             height: 100vh !important;
             max-height: 100vh !important;
             box-sizing: border-box !important;
-            padding: ${isVertical ? `28px ${paddingX}px 28px ${paddingX}px` : `24px ${paddingX}px 24px ${paddingX}px`} !important;
+            padding-block: ${isVertical ? '28px' : '24px'} !important;
+            padding-inline: ${paddingX}px !important;
             transform: translateX(0px);
             will-change: transform;
           }
@@ -338,18 +343,23 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
         }
         #kavita-book-wrapper p, #kavita-book-wrapper div, #kavita-book-wrapper section, #kavita-book-wrapper article {
           max-height: none !important;
+          max-block-size: none !important;
+          box-sizing: border-box !important;
         }
         ${pagedCss}
         img {
           max-width: 100% !important;
+          max-inline-size: 100% !important;
           height: auto !important;
           display: block !important;
           margin: 16px auto !important;
         }
         a { color: #10b981 !important; text-decoration: underline !important; cursor: pointer !important; }
         p {
-          margin: ${layoutMode === 'paged' && isVertical ? '0 0 0 1.25em' : '0 0 1.25em 0'} !important;
+          margin: 0 !important;
+          margin-block-end: 1.25em !important;
           text-indent: 2em !important;
+          line-height: ${effectiveLineHeight} !important;
         }
       </style>
     `;
