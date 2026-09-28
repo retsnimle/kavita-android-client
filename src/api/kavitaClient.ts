@@ -249,10 +249,10 @@ class KavitaClient {
     });
   }
 
-  // 取得閱讀進度
+  // 取得閱讀進度 (官方標準 GET /api/Reader/progress)
   async getProgress(chapterId: number): Promise<ProgressDto | null> {
     try {
-      return await this.request<ProgressDto>('/api/Reader/get-progress', {
+      return await this.request<ProgressDto>('/api/Reader/progress', {
         params: { chapterId },
       });
     } catch {

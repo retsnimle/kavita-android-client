@@ -30,7 +30,7 @@ Kavita 後端採用 ASP.NET Core 架構，統一路由前綴為 `/api/[controlle
 | :--- | :--- | :--- | :--- | :--- |
 | `GetImage` | `GET` | `image` | Query: `chapterId` (`int`), `page` (`int`), `apiKey` (`string`), `extractPdf` (`bool`) | **單頁漫畫/圖片串流獲取端點**。 |
 | `GetChapterInfo` | `GET` | `chapter-info` | Query: `chapterId` (`int`), `extractPdf` (`bool`), `isRereading` (`bool`) | **章節閱讀資訊**（總頁數、尺寸等）。具有在伺服器端快取該話圖片之副作用。 |
-| `GetProgress` | `GET` | `get-progress` | Query: `chapterId` (`int`) | 取得目前登入使用者在指定章節的已讀頁數。 |
+| `GetProgress` | `GET` | `progress` | Query: `chapterId` (`int`) | 取得目前登入使用者在指定章節的已讀頁數。 |
 | `SaveProgress` | `POST` | `progress` | Body: `ProgressDto`<br>(`volumeId`, `chapterId`, `pageNum`, `seriesId`, `libraryId`) | **提交閱讀進度**。行動端離線重連時對齊的主要接口。 |
 | `GetContinuePoint` | `GET` | `continue-point` | Query: `seriesId` (`int`) | 取得該作品應繼續閱讀的章節錨點。 |
 | `GetNextChapter` | `GET` | `next-chapter` | Query: `seriesId`, `volumeId`, `currentChapterId` | 由伺服器計算並回傳下一邏輯章節。 |

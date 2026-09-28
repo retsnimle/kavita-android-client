@@ -245,7 +245,7 @@ class ProgressReconciler {
       }
     }
 
-    const remotePage = remote?.pageNum ?? remote?.page ?? null;
+    const remotePage = remote?.pageNum ?? remote?.pagesRead ?? remote?.page ?? null;
     const remoteScrollId = remote?.bookScrollId ?? null;
     // Kavita 伺服器回傳的時間戳為 ISO 字串（UTC），轉為毫秒
     const remoteTs = remote?.lastModifiedUtc

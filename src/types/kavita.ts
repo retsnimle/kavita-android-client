@@ -69,6 +69,7 @@ export interface ProgressDto {
   chapterId: number;
   pageNum: number;
   page?: number;
+  pagesRead?: number;
   seriesId: number;
   libraryId?: number;
   bookScrollId?: string | null;
