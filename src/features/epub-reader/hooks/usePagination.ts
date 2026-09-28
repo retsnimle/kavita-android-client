@@ -79,12 +79,13 @@ export const usePagination = ({
       const wrapper = doc.getElementById('kavita-book-wrapper');
 
       if (wrapper) {
-        // 多欄排版中，第 pageIdx 頁皆在正 X 軸遞增，需將容器向左平移 -pageIdx * pageWidth
-        const offset = -pageIdx * pageWidth;
+        // 直排：內容向左 (負 X 軸) 延伸，需向右平移 pageIdx * pageWidth 呈現後續頁面
+        // 橫排：多欄內容向右 (正 X 軸) 延伸，需向左平移 -pageIdx * pageWidth 呈現後續頁面
+        const offset = isVertical ? pageIdx * pageWidth : -pageIdx * pageWidth;
         wrapper.style.transition = animate ? 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)' : 'none';
         wrapper.style.transform = `translateX(${offset}px)`;
       } else {
-        const targetLeft = pageIdx * pageWidth;
+        const targetLeft = isVertical ? -pageIdx * pageWidth : pageIdx * pageWidth;
         doc.defaultView?.scrollTo({
           left: targetLeft,
           top: 0,

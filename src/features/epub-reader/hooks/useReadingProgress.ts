@@ -151,7 +151,7 @@ export const useReadingProgress = ({
 
   // 單欄分頁翻頁時上報當前頁面代表性段落 XPath
   const reportPagedProgress = useCallback(
-    (pageIdx: number, pageWidth: number, doc: Document, _isVert: boolean, totalPages = 1) => {
+    (pageIdx: number, pageWidth: number, doc: Document, isVert: boolean, totalPages = 1) => {
       let currentXPath = '';
       try {
         const wrapperEl = doc.getElementById('kavita-book-wrapper') || doc.body;
@@ -167,19 +167,35 @@ export const useReadingProgress = ({
         const pageStart = pageIdx * pageWidth;
         const pageEnd = (pageIdx + 1) * pageWidth;
 
-        const targetEl =
-          candidates.find((el) => {
-            const elRect = el.getBoundingClientRect();
-            const visualX = elRect.left - wrapperRect.left;
-            return visualX >= pageStart - 20 && visualX < pageEnd;
-          }) ||
-          candidates.find((el) => {
-            const elRect = el.getBoundingClientRect();
-            const visualX = elRect.left - wrapperRect.left;
-            return visualX + elRect.width > pageStart;
-          }) ||
-          candidates[0];
-        if (targetEl) currentXPath = getXPathForElement(targetEl);
+        if (isVert) {
+          const targetEl =
+            candidates.find((el) => {
+              const elRect = el.getBoundingClientRect();
+              const visualX = wrapperRect.right - elRect.right;
+              return visualX >= pageStart - 20 && visualX < pageEnd;
+            }) ||
+            candidates.find((el) => {
+              const elRect = el.getBoundingClientRect();
+              const visualX = wrapperRect.right - elRect.right;
+              return visualX + elRect.width > pageStart;
+            }) ||
+            candidates[0];
+          if (targetEl) currentXPath = getXPathForElement(targetEl);
+        } else {
+          const targetEl =
+            candidates.find((el) => {
+              const elRect = el.getBoundingClientRect();
+              const visualX = elRect.left - wrapperRect.left;
+              return visualX >= pageStart - 20 && visualX < pageEnd;
+            }) ||
+            candidates.find((el) => {
+              const elRect = el.getBoundingClientRect();
+              const visualX = elRect.left - wrapperRect.left;
+              return visualX + elRect.width > pageStart;
+            }) ||
+            candidates[0];
+          if (targetEl) currentXPath = getXPathForElement(targetEl);
+        }
       } catch (e) {
         console.warn('提取分頁段落 XPath 失敗，將 fallback 至相對比例:', e);
       }
@@ -243,7 +259,7 @@ export const useReadingProgress = ({
       doc: Document,
       pageWidth: number,
       totalPages: number,
-      _isVert: boolean,
+      isVert: boolean,
       targetVirtual: number | 'last' | null
     ): number => {
       let targetPage = 0;
@@ -265,8 +281,13 @@ export const useReadingProgress = ({
             const wrapperBox = wrapperEl.getBoundingClientRect();
             const elBox = el.getBoundingClientRect();
 
-            const visualX = elBox.left - wrapperBox.left;
-            targetPage = Math.max(0, Math.floor((visualX + 2) / pageWidth));
+            if (isVert) {
+              const visualX = wrapperBox.right - elBox.right;
+              targetPage = Math.max(0, Math.floor((visualX + 2) / pageWidth));
+            } else {
+              const visualX = elBox.left - wrapperBox.left;
+              targetPage = Math.max(0, Math.floor((visualX + 2) / pageWidth));
+            }
             located = true;
           }
         } else if (xp.startsWith('vpage:')) {

@@ -288,10 +288,7 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
             writing-mode: vertical-rl !important;
           }
           #kavita-book-wrapper {
-            column-width: calc(100vw - ${2 * paddingX}px) !important;
-            column-gap: ${2 * paddingX}px !important;
-            column-fill: auto !important;
-            width: 100vw !important;
+            width: max-content !important;
             height: 100vh !important;
             box-sizing: border-box !important;
             padding: 28px ${paddingX}px !important;
