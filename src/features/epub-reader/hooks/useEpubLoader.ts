@@ -326,6 +326,12 @@ export const useEpubLoader = ({
             }
           );
 
+          // 3. 移除 EPUB 內部可能攜帶的腳本（防止沙盒 iframe 報錯或惡意腳本）
+          processedHtml = processedHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+          // 4. 線上模式移除相對路徑的 link stylesheet（避免 WebView 向 localhost 請求 404）
+          processedHtml = processedHtml.replace(/<link[^>]+rel=["']stylesheet["'][^>]*>/gi, '');
+
           currentSection.htmlContent = processedHtml;
           return processedHtml;
         } catch (e) {

@@ -111,20 +111,41 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
   }, [showSettings, handleClose]);
 
   // 4. 多欄分頁幾何與頁碼 Hook
+  const handleTurnSection = useCallback(
+    (nextSec: number, targetVirtual: number | 'last') => {
+      syncSectionChange(nextSec, sections.length, targetVirtual);
+    },
+    [syncSectionChange, sections.length]
+  );
+
+  const handleReportProgress = useCallback(
+    (pageIdx: number, pageWidth: number, doc: Document) => {
+      reportPagedProgress(pageIdx, pageWidth, doc, isVertical);
+    },
+    [reportPagedProgress, isVertical]
+  );
+
+  const handleResolveTargetPage = useCallback(
+    (
+      doc: Document,
+      pageWidth: number,
+      totalPages: number,
+      isVert: boolean,
+      targetVirtual: number | 'last' | null
+    ) => {
+      return resolveTargetPageFromXPath(doc, pageWidth, totalPages, isVert, targetVirtual);
+    },
+    [resolveTargetPageFromXPath]
+  );
+
   const pagination = usePagination({
     layoutMode,
     isVertical,
     totalSections: sections.length,
     currentSectionIndex,
-    onTurnSection: (nextSec, targetVirtual) => {
-      syncSectionChange(nextSec, sections.length, targetVirtual);
-    },
-    onReportProgress: (pageIdx, pageWidth, doc) => {
-      reportPagedProgress(pageIdx, pageWidth, doc, isVertical);
-    },
-    onResolveTargetPage: (doc, pageWidth, totalPages, isVert, targetVirtual) => {
-      return resolveTargetPageFromXPath(doc, pageWidth, totalPages, isVert, targetVirtual);
-    },
+    onTurnSection: handleTurnSection,
+    onReportProgress: handleReportProgress,
+    onResolveTargetPage: handleResolveTargetPage,
   });
   const {
     virtualPageIndex,
@@ -410,12 +431,8 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
         }
 
         if (unlock) {
-          const tUnlock = window.setTimeout(() => {
-            if (currentReqId !== sectionRequestIdRef.current) return;
-            isRestoringProgressRef.current = false;
-            setIsSectionLoading(false);
-          }, 200);
-          renderTimerIdsRef.current.push(tUnlock);
+          isRestoringProgressRef.current = false;
+          setIsSectionLoading(false);
         }
       };
 
@@ -427,6 +444,15 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
       }, 450);
       renderTimerIdsRef.current.push(t1, t2, t3);
     }
+
+    // 兜底防護：保證在 800ms 內一定解除「渲染章節中...」指示器
+    const safetyTimer = window.setTimeout(() => {
+      if (currentReqId === sectionRequestIdRef.current) {
+        setIsSectionLoading(false);
+        isRestoringProgressRef.current = false;
+      }
+    }, 800);
+    renderTimerIdsRef.current.push(safetyTimer);
 
     if (pendingAnchorRef.current) {
       const anchorToScroll = pendingAnchorRef.current;
@@ -480,11 +506,42 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
 
   const isReaderReady = !isLoading && isProgressReady && sections.length > 0;
 
+  const renderCurrentSectionRef = useRef(renderCurrentSection);
+  renderCurrentSectionRef.current = renderCurrentSection;
+
+  // 1. 初次載入就緒時渲染
+  const initialRenderDoneRef = useRef(false);
   useEffect(() => {
-    if (isReaderReady) {
-      renderCurrentSection();
+    if (isReaderReady && !initialRenderDoneRef.current) {
+      initialRenderDoneRef.current = true;
+      renderCurrentSectionRef.current();
     }
-  }, [isReaderReady, renderCurrentSection]);
+  }, [isReaderReady]);
+
+  // 2. 切換章節時渲染
+  const lastRenderedSectionRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (isReaderReady && initialRenderDoneRef.current && lastRenderedSectionRef.current !== currentSectionIndex) {
+      lastRenderedSectionRef.current = currentSectionIndex;
+      renderCurrentSectionRef.current();
+    }
+  }, [isReaderReady, currentSectionIndex]);
+
+  // 3. 變更排版或主題設定時重新渲染
+  useEffect(() => {
+    if (isReaderReady && initialRenderDoneRef.current) {
+      renderCurrentSectionRef.current();
+    }
+  }, [
+    fontSize,
+    lineHeight,
+    paddingX,
+    theme,
+    fontFamily,
+    activeWeightNum,
+    isVertical,
+    layoutMode,
+  ]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col select-none overflow-hidden">
@@ -542,7 +599,7 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
           title="Epub Content"
           className="w-full h-full border-none"
           style={{ backgroundColor: THEME_STYLES[theme].bg }}
-          sandbox="allow-same-origin"
+          sandbox="allow-same-origin allow-scripts"
         />
 
         {/* 單欄模式頂層透明點擊翻頁熱區 */}

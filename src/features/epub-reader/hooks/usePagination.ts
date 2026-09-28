@@ -58,6 +58,13 @@ export const usePagination = ({
   const virtualPageIndexRef = useRef<number>(0);
   const totalVirtualPagesRef = useRef<number>(1);
 
+  const onTurnSectionRef = useRef(onTurnSection);
+  onTurnSectionRef.current = onTurnSection;
+  const onReportProgressRef = useRef(onReportProgress);
+  onReportProgressRef.current = onReportProgress;
+  const onResolveTargetPageRef = useRef(onResolveTargetPage);
+  onResolveTargetPageRef.current = onResolveTargetPage;
+
   // 跳轉至指定虛擬分頁
   const goToVirtualPage = useCallback(
     (
@@ -88,10 +95,10 @@ export const usePagination = ({
       setVirtualPageIndex(pageIdx);
 
       if (reportProgress) {
-        onReportProgress(pageIdx, pageWidth, doc);
+        onReportProgressRef.current(pageIdx, pageWidth, doc);
       }
     },
-    [isVertical, onReportProgress]
+    [isVertical]
   );
 
   const goToVirtualPageRef = useRef(goToVirtualPage);
@@ -110,7 +117,7 @@ export const usePagination = ({
           goToVirtualPageRef.current(doc, pageWidth, current + 1);
         } else {
           if (currentSectionIndex < totalSections - 1) {
-            onTurnSection(currentSectionIndex + 1, 0);
+            onTurnSectionRef.current(currentSectionIndex + 1, 0);
           }
         }
       } else {
@@ -118,12 +125,12 @@ export const usePagination = ({
           goToVirtualPageRef.current(doc, pageWidth, current - 1);
         } else {
           if (currentSectionIndex > 0) {
-            onTurnSection(currentSectionIndex - 1, 'last');
+            onTurnSectionRef.current(currentSectionIndex - 1, 'last');
           }
         }
       }
     },
-    [layoutMode, currentSectionIndex, totalSections, onTurnSection]
+    [layoutMode, currentSectionIndex, totalSections]
   );
 
   // 單欄分頁測量與目標頁跳轉
@@ -152,7 +159,7 @@ export const usePagination = ({
       setTotalVirtualPages(pages);
 
       if (shouldJump) {
-        const targetPage = onResolveTargetPage(
+        const targetPage = onResolveTargetPageRef.current(
           doc,
           pageWidth,
           pages,
@@ -170,7 +177,7 @@ export const usePagination = ({
 
       return pages;
     },
-    [isVertical, onResolveTargetPage]
+    [isVertical]
   );
 
   return {
