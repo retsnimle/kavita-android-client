@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kavita Reader</string>
+    <string name="title_activity_main">Kavita Reader</string>
+    <string name="package_name">com.kavita.reader</string>
+    <string name="custom_url_scheme">com.kavita.reader</string>
+</resources>
