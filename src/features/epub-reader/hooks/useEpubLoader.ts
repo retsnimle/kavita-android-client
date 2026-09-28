@@ -217,12 +217,20 @@ export const useEpubLoader = ({
     loadAndParseEpub();
     return () => {
       mounted = false;
+      // 徹底釋放所有解壓快取的 Blob URL，杜絕記憶體洩漏
+      Object.values(imageCacheRef.current).forEach((url) => {
+        if (url && url.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(url);
+          } catch (_) {}
+        }
+      });
       zipRef.current = null;
       imageCacheRef.current = {};
     };
   }, [chapterId]);
 
-  // 單章節按需載入 HTML 並並行替換圖片路徑
+  // 單章節按需載入 HTML 並以 DOMParser 解析替換圖片路徑與清理腳本
   const getSectionHtml = useCallback(
     async (
       sectionIndex: number,
@@ -233,105 +241,131 @@ export const useEpubLoader = ({
       if (!currentSection) return null;
       if (currentSection.htmlContent) return currentSection.htmlContent;
 
+      // 淘汰離當前章節太遠的歷史章節 HTML 快取（保留前後 3 節），防止長讀記憶體暴漲
+      sections.forEach((sec, idx) => {
+        if (Math.abs(idx - sectionIndex) > 3 && sec.htmlContent) {
+          sec.htmlContent = undefined;
+        }
+      });
+
       if (isOffline && zipRef.current) {
         // === 軌道 A：離線本地解壓 ===
         const rawHtml = await zipRef.current.file(currentSection.href)?.async('text');
         if (currentReqId !== requestIdRef.current) return null;
         if (!rawHtml) return null;
 
-        let processedHtml = rawHtml;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(rawHtml, 'text/html');
+
         // 1. 並行替換 <img> 標籤
-        const imgMatches = Array.from(processedHtml.matchAll(/(<img[^>]+src=["'])([^"']+)(["'][^>]*>)/gi));
-        if (imgMatches.length > 0) {
-          const imgReplacements = await Promise.all(
-            imgMatches.map(async ([fullMatch, prefix, src, suffix]) => {
+        const imgEls = Array.from(doc.querySelectorAll('img[src]'));
+        if (imgEls.length > 0) {
+          await Promise.all(
+            imgEls.map(async (img) => {
+              const src = img.getAttribute('src');
+              if (!src) return;
               const resolved = resolveRelativePath(currentSection.href, src);
               const dataUrl = (await getImageDataUrl(resolved)) || (await getImageDataUrl(src));
-              return { fullMatch, replacement: dataUrl ? `${prefix}${dataUrl}${suffix}` : fullMatch };
+              if (dataUrl) {
+                img.setAttribute('src', dataUrl);
+              }
             })
           );
-          if (currentReqId !== requestIdRef.current) return null;
-          for (const { fullMatch, replacement } of imgReplacements) {
-            processedHtml = processedHtml.replace(fullMatch, replacement);
-          }
         }
 
-        // 2. 並行替換 <image> / <use> (SVG 格式)
-        const svgMatches = Array.from(
-          processedHtml.matchAll(/(<(?:image|use)[^>]+(?:xlink:href|href)=["'])([^"']+)(["'][^>]*>)/gi)
-        );
-        if (svgMatches.length > 0) {
-          const svgReplacements = await Promise.all(
-            svgMatches.map(async ([fullMatch, prefix, src, suffix]) => {
-              const resolved = resolveRelativePath(currentSection.href, src);
-              const dataUrl = (await getImageDataUrl(resolved)) || (await getImageDataUrl(src));
-              return { fullMatch, replacement: dataUrl ? `${prefix}${dataUrl}${suffix}` : fullMatch };
+        // 2. 並行替換 SVG <image> / <use>
+        const svgImageEls = Array.from(doc.querySelectorAll('image, use'));
+        if (svgImageEls.length > 0) {
+          await Promise.all(
+            svgImageEls.map(async (el) => {
+              const href = el.getAttribute('href') || el.getAttribute('xlink:href');
+              if (!href) return;
+              const resolved = resolveRelativePath(currentSection.href, href);
+              const dataUrl = (await getImageDataUrl(resolved)) || (await getImageDataUrl(href));
+              if (dataUrl) {
+                if (el.hasAttribute('href')) el.setAttribute('href', dataUrl);
+                if (el.hasAttribute('xlink:href')) el.setAttribute('xlink:href', dataUrl);
+                if (!el.hasAttribute('href') && !el.hasAttribute('xlink:href')) el.setAttribute('href', dataUrl);
+              }
             })
           );
-          if (currentReqId !== requestIdRef.current) return null;
-          for (const { fullMatch, replacement } of svgReplacements) {
-            processedHtml = processedHtml.replace(fullMatch, replacement);
-          }
         }
 
+        // 3. 安全清理：移除 script
+        doc.querySelectorAll('script').forEach((s) => s.remove());
+
+        if (currentReqId !== requestIdRef.current) return null;
+        const processedHtml = doc.documentElement.outerHTML;
         currentSection.htmlContent = processedHtml;
         return processedHtml;
       } else {
-        // === 軌道 B：線上串流按需加載（只抓取該節 HTML，10~50 KB，瞬間完成）===
+        // === 軌道 B：線上串流按需加載 ===
         try {
           const rawHtml = await kavitaClient.getBookPage(chapterId, sectionIndex);
           if (currentReqId !== requestIdRef.current) return null;
           if (!rawHtml) return null;
 
-          let processedHtml = rawHtml;
           const baseUrl = kavitaClient.getBaseUrl();
           const apiKey = localStorage.getItem('kavita_api_key') || '';
           const authQuery = apiKey ? `apiKey=${encodeURIComponent(apiKey)}` : '';
 
-          // 替換 img src
-          processedHtml = processedHtml.replace(
-            /(<img[^>]+src=["'])([^"']+)(["'][^>]*>)/gi,
-            (fullMatch, prefix, src, suffix) => {
-              if (
-                src.startsWith('data:') ||
-                src.startsWith('blob:') ||
-                src.startsWith('http://') ||
-                src.startsWith('https://')
-              ) {
-                return fullMatch;
-              }
-              const cleanSrc = src.startsWith('/') ? src : `/${src}`;
-              const sep = cleanSrc.includes('?') ? '&' : '?';
-              const fullUrl = authQuery ? `${baseUrl}${cleanSrc}${sep}${authQuery}` : `${baseUrl}${cleanSrc}`;
-              return `${prefix}${fullUrl}${suffix}`;
+          const resolveOnlineAssetUrl = (rawSrc: string): string => {
+            if (rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) {
+              return rawSrc;
             }
-          );
-
-          // 替換 svg image href
-          processedHtml = processedHtml.replace(
-            /(<(?:image|use)[^>]+(?:xlink:href|href)=["'])([^"']+)(["'][^>]*>)/gi,
-            (fullMatch, prefix, src, suffix) => {
-              if (
-                src.startsWith('data:') ||
-                src.startsWith('blob:') ||
-                src.startsWith('http://') ||
-                src.startsWith('https://')
-              ) {
-                return fullMatch;
+            if (rawSrc.includes('/api/book/')) {
+              const apiPath = rawSrc.substring(rawSrc.indexOf('/api/book/'));
+              let fullUrl = `${baseUrl}${apiPath}`;
+              if (authQuery && !fullUrl.includes('apiKey=')) {
+                fullUrl += fullUrl.includes('?') ? `&${authQuery}` : `?${authQuery}`;
               }
-              const cleanSrc = src.startsWith('/') ? src : `/${src}`;
-              const sep = cleanSrc.includes('?') ? '&' : '?';
-              const fullUrl = authQuery ? `${baseUrl}${cleanSrc}${sep}${authQuery}` : `${baseUrl}${cleanSrc}`;
-              return `${prefix}${fullUrl}${suffix}`;
+              return fullUrl;
             }
-          );
+            if (rawSrc.startsWith('http://') || rawSrc.startsWith('https://')) {
+              return rawSrc;
+            }
+            // 相對路徑圖片，映射至 Kavita 官方 book-resources 端點
+            const clean = rawSrc.replace(/^\/+/, '');
+            return `${baseUrl}/api/book/${chapterId}/book-resources?file=${encodeURIComponent(clean)}${
+              authQuery ? `&${authQuery}` : ''
+            }`;
+          };
 
-          // 3. 移除 EPUB 內部可能攜帶的腳本（防止沙盒 iframe 報錯或惡意腳本）
-          processedHtml = processedHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(rawHtml, 'text/html');
 
-          // 4. 線上模式移除相對路徑的 link stylesheet（避免 WebView 向 localhost 請求 404）
-          processedHtml = processedHtml.replace(/<link[^>]+rel=["']stylesheet["'][^>]*>/gi, '');
+          // 1. 替換 <img> 標籤
+          doc.querySelectorAll('img[src]').forEach((img) => {
+            const src = img.getAttribute('src');
+            if (src) {
+              img.setAttribute('src', resolveOnlineAssetUrl(src));
+            }
+          });
 
+          // 2. 替換 SVG <image> / <use>
+          doc.querySelectorAll('image, use').forEach((el) => {
+            const href = el.getAttribute('href') || el.getAttribute('xlink:href');
+            if (href) {
+              const fullUrl = resolveOnlineAssetUrl(href);
+              if (el.hasAttribute('href')) el.setAttribute('href', fullUrl);
+              if (el.hasAttribute('xlink:href')) el.setAttribute('xlink:href', fullUrl);
+              if (!el.hasAttribute('href') && !el.hasAttribute('xlink:href')) el.setAttribute('href', fullUrl);
+            }
+          });
+
+          // 3. 安全清理：移除 <script> 標籤
+          doc.querySelectorAll('script').forEach((s) => s.remove());
+
+          // 4. 線上模式移除相對路徑 link stylesheet（避免 WebView 向 localhost 請求 404）
+          doc.querySelectorAll('link[rel="stylesheet"]').forEach((link) => {
+            const href = link.getAttribute('href') || '';
+            if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('data:')) {
+              link.remove();
+            }
+          });
+
+          if (currentReqId !== requestIdRef.current) return null;
+          const processedHtml = doc.documentElement.outerHTML;
           currentSection.htmlContent = processedHtml;
           return processedHtml;
         } catch (e) {

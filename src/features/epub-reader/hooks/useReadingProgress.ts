@@ -28,7 +28,8 @@ export interface UseReadingProgressReturn {
     pageIdx: number,
     pageWidth: number,
     doc: Document,
-    isVertical: boolean
+    isVertical: boolean,
+    totalPages?: number
   ) => void;
   reportScrollProgress: (
     top: number,
@@ -150,14 +151,16 @@ export const useReadingProgress = ({
 
   // 單欄分頁翻頁時上報當前頁面代表性段落 XPath
   const reportPagedProgress = useCallback(
-    (pageIdx: number, pageWidth: number, doc: Document, isVert: boolean) => {
+    (pageIdx: number, pageWidth: number, doc: Document, isVert: boolean, totalPages = 1) => {
       let currentXPath = '';
       try {
         const wrapperEl = doc.getElementById('kavita-book-wrapper') || doc.body;
         const candidates = Array.from(
-          wrapperEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, div')
+          wrapperEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, div, img')
         ).filter((el) => {
-          return el.id !== 'kavita-book-wrapper' && el.textContent && el.textContent.trim().length > 0;
+          if (el.id === 'kavita-book-wrapper') return false;
+          if (el.tagName.toLowerCase() === 'img') return true;
+          return el.textContent && el.textContent.trim().length > 0;
         });
 
         const wrapperRect = wrapperEl.getBoundingClientRect();
@@ -196,10 +199,11 @@ export const useReadingProgress = ({
           if (targetEl) currentXPath = getXPathForElement(targetEl);
         }
       } catch (e) {
-        console.warn('提取分頁段落 XPath 失敗，將 fallback 至虛擬頁碼:', e);
+        console.warn('提取分頁段落 XPath 失敗，將 fallback 至相對比例:', e);
       }
 
-      const scrollId = currentXPath || `vpage:${pageIdx}`;
+      const ratio = totalPages > 1 ? (pageIdx / (totalPages - 1)).toFixed(4) : '0.0000';
+      const scrollId = currentXPath || `pos:${ratio}`;
       progressReconciler.updateProgressOptimistic(
         seriesId,
         volumeId,
@@ -218,8 +222,12 @@ export const useReadingProgress = ({
       try {
         const wrapperEl = doc.getElementById('kavita-book-wrapper') || doc.body;
         const candidates = Array.from(
-          wrapperEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, div')
-        ).filter((el) => el.id !== 'kavita-book-wrapper' && el.textContent && el.textContent.trim().length > 0);
+          wrapperEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, div, img')
+        ).filter((el) => {
+          if (el.id === 'kavita-book-wrapper') return false;
+          if (el.tagName.toLowerCase() === 'img') return true;
+          return el.textContent && el.textContent.trim().length > 0;
+        });
 
         const targetEl =
           candidates.find((el) => {
@@ -233,7 +241,9 @@ export const useReadingProgress = ({
         console.warn('滾動提取段落 XPath 失敗:', e);
       }
 
-      const scrollId = currentXPath || `scroll:${Math.round(top)}`;
+      const scrollH = Math.max(doc.documentElement.scrollHeight || 0, doc.body.scrollHeight || 0, 1);
+      const ratio = Math.min(1, Math.max(0, top / scrollH)).toFixed(4);
+      const scrollId = currentXPath || `pos:${ratio}`;
       progressReconciler.updateProgressOptimistic(
         seriesId,
         volumeId,
@@ -261,6 +271,10 @@ export const useReadingProgress = ({
         const xp = pendingTargetXPathRef.current;
         if (xp === 'last' || xp === 'vpage:last') {
           targetPage = totalPages - 1;
+          located = true;
+        } else if (xp.startsWith('pos:')) {
+          const ratio = parseFloat(xp.replace('pos:', '')) || 0;
+          targetPage = Math.min(totalPages - 1, Math.max(0, Math.round(ratio * (totalPages - 1))));
           located = true;
         } else if (xp.includes('/') || xp.startsWith('id(')) {
           const el = getElementByXPath(doc, xp);
@@ -302,12 +316,23 @@ export const useReadingProgress = ({
       let located = false;
       if (pendingTargetXPathRef.current) {
         const xp = pendingTargetXPathRef.current;
-        if (xp.includes('/') || xp.startsWith('id(')) {
+        if (xp.startsWith('pos:')) {
+          const ratio = parseFloat(xp.replace('pos:', '')) || 0;
+          const scrollH = Math.max(doc.documentElement.scrollHeight || 0, doc.body.scrollHeight || 0);
+          const maxScroll = Math.max(0, scrollH - (win.innerHeight || 0));
+          const targetY = Math.round(ratio * maxScroll);
+          win.scrollTo({ top: targetY, left: 0, behavior: 'auto' });
+          located = true;
+        } else if (xp.includes('/') || xp.startsWith('id(')) {
           const el = getElementByXPath(doc, xp);
           if (el) {
             el.scrollIntoView({ behavior: 'auto', block: 'start' });
             located = true;
           }
+        } else if (xp.startsWith('scroll:')) {
+          const parsed = parseInt(xp.replace('scroll:', ''), 10) || 0;
+          win.scrollTo({ top: parsed, left: 0, behavior: 'auto' });
+          located = true;
         }
       }
 

@@ -31,6 +31,24 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
   // 定時器清理與非同步世代保護鎖
   const renderTimerIdsRef = useRef<number[]>([]);
   const sectionRequestIdRef = useRef<number>(0);
+  const onLayoutReadyRef = useRef<((data: any) => void) | null>(null);
+
+  // 監聽來自 iframe 內部 reader-engine 的排版就緒事件
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'KAVITA_LAYOUT_READY') {
+        if (e.data.reqId === sectionRequestIdRef.current) {
+          if (onLayoutReadyRef.current) {
+            onLayoutReadyRef.current(e.data);
+          }
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
 
   const getIframeDoc = useCallback(() => {
     return iframeRef.current?.contentDocument || iframeRef.current?.contentWindow?.document;
@@ -119,8 +137,8 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
   );
 
   const handleReportProgress = useCallback(
-    (pageIdx: number, pageWidth: number, doc: Document) => {
-      reportPagedProgress(pageIdx, pageWidth, doc, isVertical);
+    (pageIdx: number, pageWidth: number, doc: Document, totalPages = 1) => {
+      reportPagedProgress(pageIdx, pageWidth, doc, isVertical, totalPages);
     },
     [reportPagedProgress, isVertical]
   );
@@ -155,9 +173,13 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
   } = pagination;
 
   const [isProgressReady, setIsProgressReady] = useState<boolean>(false);
+  const initialRenderDoneRef = useRef(false);
+  const lastRenderedSectionRef = useRef<number | null>(null);
 
   useEffect(() => {
     setIsProgressReady(false);
+    initialRenderDoneRef.current = false;
+    lastRenderedSectionRef.current = null;
   }, [chapterId]);
 
   // 當骨架解析完成時，初始化雙向有效進度，對齊完成後才標記就緒（徹底杜絕搶先渲染封面）
@@ -323,6 +345,83 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
       </style>
     `;
 
+    const readerEngineScript = `
+      <script id="kavita-reader-engine">
+        (function() {
+          var reqId = ${currentReqId};
+          var reported = false;
+          var wrapper = document.getElementById('kavita-book-wrapper') || document.body;
+
+          function reportReady() {
+            if (reported) return;
+            reported = true;
+            var scrollW = Math.max(
+              wrapper ? (wrapper.getBoundingClientRect ? wrapper.getBoundingClientRect().width : 0) : 0,
+              wrapper ? wrapper.scrollWidth : 0,
+              document.documentElement.scrollWidth || 0,
+              document.body.scrollWidth || 0
+            );
+            var scrollH = Math.max(
+              wrapper ? wrapper.scrollHeight : 0,
+              document.documentElement.scrollHeight || 0,
+              document.body.scrollHeight || 0
+            );
+            var clientW = document.documentElement.clientWidth || window.innerWidth || 0;
+            var clientH = document.documentElement.clientHeight || window.innerHeight || 0;
+
+            window.parent.postMessage({
+              type: 'KAVITA_LAYOUT_READY',
+              reqId: reqId,
+              scrollWidth: scrollW,
+              scrollHeight: scrollH,
+              clientWidth: clientW,
+              clientHeight: clientH
+            }, '*');
+          }
+
+          function waitForResources() {
+            var images = Array.from(document.images || []);
+            var pendingImages = images.filter(function(img) { return !img.complete; });
+            var fontPromise = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+
+            fontPromise.then(function() {
+              if (pendingImages.length === 0) {
+                requestAnimationFrame(function() {
+                  requestAnimationFrame(reportReady);
+                });
+              } else {
+                var loadedCount = 0;
+                var checkDone = function() {
+                  loadedCount++;
+                  if (loadedCount >= pendingImages.length) {
+                    requestAnimationFrame(function() {
+                      requestAnimationFrame(reportReady);
+                    });
+                  }
+                };
+                pendingImages.forEach(function(img) {
+                  img.addEventListener('load', checkDone, { once: true });
+                  img.addEventListener('error', checkDone, { once: true });
+                });
+                setTimeout(reportReady, 1200);
+              }
+            }).catch(function() {
+              setTimeout(reportReady, 100);
+            });
+
+            setTimeout(reportReady, 2000);
+          }
+
+          if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            waitForResources();
+          } else {
+            document.addEventListener('DOMContentLoaded', waitForResources, { once: true });
+            window.addEventListener('load', waitForResources, { once: true });
+          }
+        })();
+      </script>
+    `;
+
     let content = rawHtml;
     if (layoutMode === 'paged') {
       if (content.includes('<body')) {
@@ -339,6 +438,13 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
       content = customCss + content;
     }
 
+    // 注入 reader engine 腳本
+    if (content.includes('</body>')) {
+      content = content.replace('</body>', `${readerEngineScript}</body>`);
+    } else {
+      content = content + readerEngineScript;
+    }
+
     const win = iframeRef.current?.contentWindow;
     const doc = iframeDoc;
     const currentActualScroll = win?.scrollY || doc?.documentElement?.scrollTop || doc?.body?.scrollTop || 0;
@@ -347,6 +453,41 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
 
     const targetVirtual = initialVirtualTargetRef.current;
     initialVirtualTargetRef.current = null;
+
+    if (layoutMode === 'scroll') {
+      isRestoringProgressRef.current = true;
+    }
+
+    // 註冊佈局就緒回調（由 iframe postMessage 驅動）
+    onLayoutReadyRef.current = (data: { scrollWidth: number; clientWidth: number }) => {
+      if (currentReqId !== sectionRequestIdRef.current) return;
+      const currentDoc = getIframeDoc();
+      const currentWin = iframeRef.current?.contentWindow;
+      if (!currentDoc || !currentWin) return;
+
+      const w = data.clientWidth || iframeRef.current?.clientWidth || currentWin.innerWidth || currentDoc.documentElement.clientWidth;
+
+      if (layoutMode === 'paged') {
+        calculatePages(currentDoc, w, targetVirtual, true, data.scrollWidth);
+        pendingTargetXPathRef.current = null;
+        setIsSectionLoading(false);
+      } else {
+        resolveScrollTarget(currentWin, currentDoc, targetScroll);
+        const wrapperEl = currentDoc.getElementById('kavita-book-wrapper') || currentDoc.body;
+        if (wrapperEl && !wrapperEl.classList.contains('is-ready')) {
+          wrapperEl.classList.add('is-ready');
+        }
+        isRestoringProgressRef.current = false;
+        setIsSectionLoading(false);
+        pendingTargetXPathRef.current = null;
+      }
+
+      if (pendingAnchorRef.current) {
+        const anchorToScroll = pendingAnchorRef.current;
+        pendingAnchorRef.current = null;
+        scrollToAnchor(anchorToScroll);
+      }
+    };
 
     iframeDoc.open();
     iframeDoc.write(content);
@@ -362,96 +503,41 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
       iframeDoc.addEventListener('wheel', blockScroll, { passive: false });
     }
 
-    // 綁定 iframe 點擊熱區與超連結
+    // iframe 內部只保留超連結攔截，翻頁交由外層統一熱區
     iframeDoc.onclick = (e: MouseEvent) => {
-      e.stopPropagation();
       const target = e.target as HTMLElement | null;
       const anchor = target?.closest('a');
       if (anchor) {
         const href = anchor.getAttribute('href');
         if (href && !href.startsWith('javascript:')) {
           e.preventDefault();
+          e.stopPropagation();
           handleLinkClick(href);
-          return;
         }
-      }
-
-      if (layoutMode === 'paged') {
-        const clickX = e.clientX;
-        const screenWidth = iframeDoc.documentElement.clientWidth || window.innerWidth;
-        const ratio = clickX / screenWidth;
-
-        if (ratio < 0.3) {
-          if (isVertical) {
-            turnPage(iframeDoc, screenWidth, 'next');
-          } else {
-            turnPage(iframeDoc, screenWidth, 'prev');
-          }
-        } else if (ratio > 0.7) {
-          if (isVertical) {
-            turnPage(iframeDoc, screenWidth, 'prev');
-          } else {
-            turnPage(iframeDoc, screenWidth, 'next');
-          }
-        } else {
-          setShowControls((prev) => !prev);
-        }
-      } else {
-        setShowControls((prev) => !prev);
       }
     };
 
     const iframeWin = iframeRef.current?.contentWindow;
     if (!iframeWin) return;
 
-    if (layoutMode === 'scroll') {
-      isRestoringProgressRef.current = true;
-    }
-
-    const w = iframeRef.current?.clientWidth || iframeWin.innerWidth || iframeDoc.documentElement.clientWidth;
-
-    // 快速三階段排版測量
-    if (layoutMode === 'paged') {
-      const t1 = window.setTimeout(() => calculatePages(iframeDoc, w, targetVirtual, true), 50);
-      const t2 = window.setTimeout(() => calculatePages(iframeDoc, w, targetVirtual, true), 200);
-      const t3 = window.setTimeout(() => {
-        calculatePages(iframeDoc, w, targetVirtual, true);
-        pendingTargetXPathRef.current = null;
-        setIsSectionLoading(false);
-      }, 450);
-      renderTimerIdsRef.current.push(t1, t2, t3);
-    } else {
-      const performScroll = (unlock = false) => {
-        if (currentReqId !== sectionRequestIdRef.current) return;
-        resolveScrollTarget(iframeWin, iframeDoc, targetScroll);
-
-        const wrapperEl = iframeDoc.getElementById('kavita-book-wrapper') || iframeDoc.body;
-        if (wrapperEl && !wrapperEl.classList.contains('is-ready')) {
-          wrapperEl.classList.add('is-ready');
-        }
-
-        if (unlock) {
-          isRestoringProgressRef.current = false;
-          setIsSectionLoading(false);
-        }
-      };
-
-      const t1 = window.setTimeout(() => performScroll(false), 50);
-      const t2 = window.setTimeout(() => performScroll(false), 200);
-      const t3 = window.setTimeout(() => {
-        performScroll(true);
-        pendingTargetXPathRef.current = null;
-      }, 450);
-      renderTimerIdsRef.current.push(t1, t2, t3);
-    }
-
-    // 兜底防護：保證在 800ms 內一定解除「渲染章節中...」指示器
+    // 兜底防護：若 postMessage 因任何極端狀況未在 2.5 秒內觸發，強制執行兜底計算
     const safetyTimer = window.setTimeout(() => {
       if (currentReqId === sectionRequestIdRef.current) {
+        const fallbackDoc = getIframeDoc();
+        const fallbackWin = iframeRef.current?.contentWindow;
+        if (fallbackDoc && fallbackWin) {
+          const w = iframeRef.current?.clientWidth || fallbackWin.innerWidth || fallbackDoc.documentElement.clientWidth;
+          if (layoutMode === 'paged') {
+            calculatePages(fallbackDoc, w, targetVirtual, true);
+          } else {
+            resolveScrollTarget(fallbackWin, fallbackDoc, targetScroll);
+          }
+        }
         setIsSectionLoading(false);
         isRestoringProgressRef.current = false;
+        pendingTargetXPathRef.current = null;
       }
-    }, 800);
+    }, 2500);
     renderTimerIdsRef.current.push(safetyTimer);
 
     if (pendingAnchorRef.current) {
@@ -510,7 +596,6 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
   renderCurrentSectionRef.current = renderCurrentSection;
 
   // 1. 初次載入就緒時渲染
-  const initialRenderDoneRef = useRef(false);
   useEffect(() => {
     if (isReaderReady && !initialRenderDoneRef.current) {
       initialRenderDoneRef.current = true;
@@ -519,7 +604,6 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
   }, [isReaderReady]);
 
   // 2. 切換章節時渲染
-  const lastRenderedSectionRef = useRef<number | null>(null);
   useEffect(() => {
     if (isReaderReady && initialRenderDoneRef.current && lastRenderedSectionRef.current !== currentSectionIndex) {
       lastRenderedSectionRef.current = currentSectionIndex;

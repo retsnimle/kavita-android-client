@@ -177,9 +177,33 @@ class ProgressReconciler {
         return { success: 0, failed: 0 };
       }
 
-      console.log(`[Reconciler] 開始對齊 ${pendingItems.length} 筆離線進度...`);
+      // 佇列去重：同一個 chapterId 只保留時間戳最新且讀得最遠的一筆
+      const latestItemsMap = new Map<number, typeof pendingItems[0]>();
+      const redundantIds: number[] = [];
 
       for (const item of pendingItems) {
+        const existing = latestItemsMap.get(item.chapterId);
+        if (!existing) {
+          latestItemsMap.set(item.chapterId, item);
+        } else {
+          if (item.timestamp >= existing.timestamp || item.page >= existing.page) {
+            if (existing.id) redundantIds.push(existing.id);
+            latestItemsMap.set(item.chapterId, item);
+          } else {
+            if (item.id) redundantIds.push(item.id);
+          }
+        }
+      }
+
+      // 清理冗餘的舊佇列項
+      for (const id of redundantIds) {
+        await db.progress_queue.delete(id).catch(() => {});
+      }
+
+      const deduplicatedItems = Array.from(latestItemsMap.values());
+      console.log(`[Reconciler] 開始對齊 ${deduplicatedItems.length} 筆離線進度（已去重清理 ${redundantIds.length} 筆）...`);
+
+      for (const item of deduplicatedItems) {
         try {
           if (item.id) {
             await db.progress_queue.update(item.id, { status: 'syncing' });
@@ -227,9 +251,10 @@ class ProgressReconciler {
    * 邏輯：
    * 1. 同時讀取本地快取與伺服器進度
    * 2. 比較時間戳 (lastModifiedUtc vs local.timestamp)
-   * 3. 伺服器較新 → 回傳伺服器進度，並更新本地快取
-   * 4. 本地較新  → 回傳本地進度，並順帶將本地上推至伺服器
-   * 5. 兩者皆無  → 回傳 { page: 0, bookScrollId: null }
+   * 3. 時間差在容差範圍內 (5s) 時，取進度更遠者，避免時鐘漂移導致倒退
+   * 4. 伺服器較新 → 回傳伺服器進度，並更新本地快取
+   * 5. 本地較新  → 回傳本地進度，並順帶將本地上推至伺服器
+   * 6. 兩者皆無  → 回傳 { page: 0, bookScrollId: null }
    */
   async getEffectiveProgress(chapterId: number): Promise<{ page: number; bookScrollId?: string | null }> {
     const local = await db.cached_progress.get(chapterId);
@@ -271,22 +296,34 @@ class ProgressReconciler {
       return { page: localPage, bookScrollId: localScrollId };
     }
 
-    // 兩者都有，比較時間戳
-    if (remoteTs > localTs) {
-      // 伺服器較新：更新本地快取，以伺服器為準
-      console.log(`[Reconciler] 伺服器進度較新 (P.${remotePage} [${remoteScrollId}] > local P.${localPage} [${localScrollId}])，更新本地快取`);
+    // 兩者都有，判斷時間戳（引入 5 秒容差窗，若相近則以讀得更遠者為準）
+    const tsDiff = remoteTs - localTs;
+    const isRemoteNewer = tsDiff > 5000;
+    const isLocalNewer = tsDiff < -5000;
+
+    let useRemote = false;
+    if (isRemoteNewer) {
+      useRemote = true;
+    } else if (isLocalNewer) {
+      useRemote = false;
+    } else {
+      // 時間在 5 秒內極為接近，以頁碼讀得更遠者為準
+      useRemote = (remotePage ?? 0) >= (localPage ?? 0);
+    }
+
+    if (useRemote) {
+      console.log(`[Reconciler] 採納伺服器進度 (P.${remotePage} [${remoteScrollId}] >= local P.${localPage} [${localScrollId}])，更新本地快取`);
       await db.cached_progress.put({
         chapterId,
         seriesId: remote!.seriesId ?? local?.seriesId ?? 0,
         volumeId: remote!.volumeId ?? local?.volumeId ?? 0,
-        page: remotePage,
+        page: remotePage ?? 0,
         bookScrollId: remoteScrollId,
-        timestamp: remoteTs,
+        timestamp: remoteTs || Date.now(),
       });
-      return { page: remotePage, bookScrollId: remoteScrollId };
-    } else if (localTs > remoteTs) {
-      // 本地較新：非同步上推至伺服器（不阻塞開書）
-      console.log(`[Reconciler] 本地進度較新 (P.${localPage} [${localScrollId}] > remote P.${remotePage})，背景上推伺服器`);
+      return { page: remotePage ?? 0, bookScrollId: remoteScrollId };
+    } else {
+      console.log(`[Reconciler] 採納本地進度 (P.${localPage} [${localScrollId}] >= remote P.${remotePage})，背景上推伺服器`);
       const series = await db.cached_series.get(local!.seriesId).catch(() => null);
       kavitaClient.saveProgress({
         seriesId: local!.seriesId,
@@ -299,9 +336,6 @@ class ProgressReconciler {
       }).catch(() => {});
       return { page: localPage, bookScrollId: localScrollId };
     }
-
-    // 時間戳相同（含兩者都是 0 的初始情形），沿用本地
-    return { page: localPage, bookScrollId: localScrollId };
   }
 }
 

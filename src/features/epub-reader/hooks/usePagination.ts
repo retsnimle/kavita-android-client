@@ -7,7 +7,7 @@ interface UsePaginationProps {
   totalSections: number;
   currentSectionIndex: number;
   onTurnSection: (nextSectionIndex: number, targetVirtual: number | 'last') => void;
-  onReportProgress: (pageIdx: number, pageWidth: number, doc: Document) => void;
+  onReportProgress: (pageIdx: number, pageWidth: number, doc: Document, totalPages?: number) => void;
   onResolveTargetPage: (
     doc: Document,
     pageWidth: number,
@@ -40,7 +40,8 @@ export interface UsePaginationReturn {
     doc: Document,
     pageWidth: number,
     targetVirtual: number | 'last' | null,
-    shouldJump?: boolean
+    shouldJump?: boolean,
+    knownScrollWidth?: number
   ) => number;
 }
 
@@ -95,7 +96,7 @@ export const usePagination = ({
       setVirtualPageIndex(pageIdx);
 
       if (reportProgress) {
-        onReportProgressRef.current(pageIdx, pageWidth, doc);
+        onReportProgressRef.current(pageIdx, pageWidth, doc, totalVirtualPagesRef.current);
       }
     },
     [isVertical]
@@ -139,19 +140,22 @@ export const usePagination = ({
       doc: Document,
       pageWidth: number,
       targetVirtual: number | 'last' | null,
-      shouldJump = false
+      shouldJump = false,
+      knownScrollWidth?: number
     ): number => {
       if (!doc || pageWidth <= 0) return 1;
 
       const wrapper = doc.getElementById('kavita-book-wrapper') || doc.body;
-      const wrapperRect = wrapper.getBoundingClientRect ? wrapper.getBoundingClientRect().width : 0;
-      const scrollW = Math.max(
-        wrapperRect,
-        wrapper.scrollWidth || 0,
-        doc.documentElement.scrollWidth || 0,
-        doc.body.scrollWidth || 0,
-        pageWidth
-      );
+      const scrollW =
+        knownScrollWidth !== undefined && knownScrollWidth > 0
+          ? Math.max(knownScrollWidth, pageWidth)
+          : Math.max(
+              wrapper.getBoundingClientRect ? wrapper.getBoundingClientRect().width : 0,
+              wrapper.scrollWidth || 0,
+              doc.documentElement.scrollWidth || 0,
+              doc.body.scrollWidth || 0,
+              pageWidth
+            );
 
       // 減去微小的 2px 浮點容差，即刻算出總頁數
       const pages = Math.max(1, Math.ceil((scrollW - 2) / pageWidth));
