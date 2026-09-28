@@ -66,6 +66,8 @@ export const usePagination = ({
   const onResolveTargetPageRef = useRef(onResolveTargetPage);
   onResolveTargetPageRef.current = onResolveTargetPage;
 
+  const pageOffsetsRef = useRef<number[]>([0]);
+
   // 跳轉至指定虛擬分頁
   const goToVirtualPage = useCallback(
     (
@@ -77,15 +79,15 @@ export const usePagination = ({
     ) => {
       if (!doc) return;
       const wrapper = doc.getElementById('kavita-book-wrapper');
+      const offset = isVertical
+        ? (pageOffsetsRef.current[pageIdx] ?? pageIdx * pageWidth)
+        : -pageIdx * pageWidth;
 
       if (wrapper) {
-        // 直排：內容向左 (負 X 軸) 延伸，需向右平移 pageIdx * pageWidth 呈現後續頁面
-        // 橫排：多欄內容向右 (正 X 軸) 延伸，需向左平移 -pageIdx * pageWidth 呈現後續頁面
-        const offset = isVertical ? pageIdx * pageWidth : -pageIdx * pageWidth;
         wrapper.style.transition = animate ? 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)' : 'none';
         wrapper.style.transform = `translateX(${offset}px)`;
       } else {
-        const targetLeft = isVertical ? -pageIdx * pageWidth : pageIdx * pageWidth;
+        const targetLeft = isVertical ? -offset : pageIdx * pageWidth;
         doc.defaultView?.scrollTo({
           left: targetLeft,
           top: 0,
@@ -134,7 +136,7 @@ export const usePagination = ({
     [layoutMode, currentSectionIndex, totalSections]
   );
 
-  // 單欄分頁測量與目標頁跳轉
+  // 幾何精確分頁測量與目標頁跳轉
   const calculatePages = useCallback(
     (
       doc: Document,
@@ -146,40 +148,116 @@ export const usePagination = ({
       if (!doc || pageWidth <= 0) return 1;
 
       const wrapper = doc.getElementById('kavita-book-wrapper') || doc.body;
-      const scrollW =
-        knownScrollWidth !== undefined && knownScrollWidth > 0
-          ? Math.max(knownScrollWidth, pageWidth)
-          : Math.max(
-              wrapper.getBoundingClientRect ? wrapper.getBoundingClientRect().width : 0,
-              wrapper.scrollWidth || 0,
-              doc.documentElement.scrollWidth || 0,
-              doc.body.scrollWidth || 0,
-              pageWidth
-            );
 
-      // 減去微小的 2px 浮點容差，即刻算出總頁數
-      const pages = Math.max(1, Math.ceil((scrollW - 2) / pageWidth));
-      totalVirtualPagesRef.current = pages;
-      setTotalVirtualPages(pages);
+      if (isVertical) {
+        // 直排：基於真實文字行物理邊界的 Line Snap Paging Engine
+        const oldTransform = wrapper.style.transform;
+        wrapper.style.transform = 'none';
 
-      if (shouldJump) {
-        const targetPage = onResolveTargetPageRef.current(
-          doc,
-          pageWidth,
-          pages,
-          isVertical,
-          targetVirtual
-        );
-        goToVirtualPageRef.current(doc, pageWidth, targetPage, false, false);
+        const W = pageWidth;
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const baseRight = wrapperRect.right;
+
+        const textNodes: Text[] = [];
+        const walk = doc.createTreeWalker(wrapper, NodeFilter.SHOW_TEXT, null);
+        let n: Node | null;
+        while ((n = walk.nextNode())) {
+          if (n.textContent && n.textContent.trim().length > 0) {
+            textNodes.push(n as Text);
+          }
+        }
+
+        const range = doc.createRange();
+        const lineDistances: { rightDist: number; leftDist: number; width: number }[] = [];
+        for (const node of textNodes) {
+          range.selectNodeContents(node);
+          const rects = range.getClientRects();
+          for (let i = 0; i < rects.length; i++) {
+            const r = rects[i];
+            if (r.width > 0 && r.height > 0) {
+              const rightDist = Math.max(0, baseRight - r.right);
+              const leftDist = Math.max(0, baseRight - r.left);
+              lineDistances.push({ rightDist, leftDist, width: r.width });
+            }
+          }
+        }
+
+        lineDistances.sort((a, b) => a.rightDist - b.rightDist);
+
+        const offsets: number[] = [0];
+        let currentStartDist = 0;
+
+        for (let i = 0; i < lineDistances.length; i++) {
+          const line = lineDistances[i];
+          if (line.leftDist > currentStartDist + W) {
+            const nextStartDist = line.rightDist;
+            if (nextStartDist > currentStartDist) {
+              offsets.push(nextStartDist);
+              currentStartDist = nextStartDist;
+            }
+          }
+        }
+
+        if (offsets.length === 0) offsets.push(0);
+        pageOffsetsRef.current = offsets;
+        wrapper.style.transform = oldTransform;
+
+        const pages = offsets.length;
+        totalVirtualPagesRef.current = pages;
+        setTotalVirtualPages(pages);
+
+        if (shouldJump) {
+          const targetPage = onResolveTargetPageRef.current(
+            doc,
+            W,
+            pages,
+            isVertical,
+            targetVirtual
+          );
+          goToVirtualPageRef.current(doc, pageWidth, targetPage, false, false);
+        }
+
+        const wrapperEl = doc.getElementById('kavita-book-wrapper');
+        if (wrapperEl && !wrapperEl.classList.contains('is-ready')) {
+          wrapperEl.classList.add('is-ready');
+        }
+
+        return pages;
+      } else {
+        // 橫排：CSS Multi-column 視窗寬度分頁
+        const scrollW =
+          knownScrollWidth !== undefined && knownScrollWidth > 0
+            ? Math.max(knownScrollWidth, pageWidth)
+            : Math.max(
+                wrapper.getBoundingClientRect ? wrapper.getBoundingClientRect().width : 0,
+                wrapper.scrollWidth || 0,
+                doc.documentElement.scrollWidth || 0,
+                doc.body.scrollWidth || 0,
+                pageWidth
+              );
+
+        const pages = Math.max(1, Math.ceil((scrollW - 2) / pageWidth));
+        totalVirtualPagesRef.current = pages;
+        setTotalVirtualPages(pages);
+
+        if (shouldJump) {
+          const targetPage = onResolveTargetPageRef.current(
+            doc,
+            pageWidth,
+            pages,
+            isVertical,
+            targetVirtual
+          );
+          goToVirtualPageRef.current(doc, pageWidth, targetPage, false, false);
+        }
+
+        const wrapperEl = doc.getElementById('kavita-book-wrapper');
+        if (wrapperEl && !wrapperEl.classList.contains('is-ready')) {
+          wrapperEl.classList.add('is-ready');
+        }
+
+        return pages;
       }
-
-      // 初次跳轉定位完成，揭示 wrapper 呈現淡入動畫（消除抽動）
-      const wrapperEl = doc.getElementById('kavita-book-wrapper');
-      if (wrapperEl && !wrapperEl.classList.contains('is-ready')) {
-        wrapperEl.classList.add('is-ready');
-      }
-
-      return pages;
     },
     [isVertical]
   );

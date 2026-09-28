@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { backButtonManager } from '../../core/navigation/backButtonManager';
 import { fontLoader } from '../../core/storage/fontLoader';
 import {
@@ -173,6 +173,15 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
     virtualPageIndexRef,
   } = pagination;
 
+  const verticalIframeWidth = useMemo(() => {
+    if (layoutMode !== 'paged' || !isVertical) return '100%';
+    const w = window.innerWidth;
+    const lineStep = fontSize * lineHeight;
+    const availableW = Math.max(100, w - 2 * paddingX);
+    const linesPerPage = Math.max(1, Math.floor(availableW / lineStep));
+    return `${linesPerPage * lineStep}px`;
+  }, [layoutMode, isVertical, fontSize, lineHeight, paddingX]);
+
   const [isProgressReady, setIsProgressReady] = useState<boolean>(false);
   const initialRenderDoneRef = useRef(false);
   const lastRenderedSectionRef = useRef<number | null>(null);
@@ -271,9 +280,9 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
     }
 
     const currentTheme = THEME_STYLES[theme];
-    const effectiveLineHeight = isVertical ? '1.9' : lineHeight.toString();
+    const effectiveLineHeight = lineHeight.toString();
     const writingMode = isVertical ? 'vertical-rl' : 'horizontal-tb';
-    const paddingStyle = isVertical ? `${paddingX}px 1.5rem` : `1.5rem ${paddingX}px`;
+    const paddingStyle = isVertical ? `32px ${paddingX}px` : `24px ${paddingX}px`;
 
     const pagedCss =
       layoutMode === 'paged'
@@ -291,7 +300,7 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
             width: max-content !important;
             height: 100vh !important;
             box-sizing: border-box !important;
-            padding: 28px ${paddingX}px !important;
+            padding: 32px 0 !important;
             margin: 0 !important;
             transform: translateX(0px);
             will-change: transform;
@@ -338,11 +347,13 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
           font-family: ${resolvedFontFamily} !important;
           font-weight: ${activeWeightNum} !important;
         }
+        html, body, #kavita-book-wrapper, #kavita-book-wrapper p, #kavita-book-wrapper div, #kavita-book-wrapper span {
+          line-height: ${effectiveLineHeight} !important;
+        }
         html, body {
           background-color: ${currentTheme.bg} !important;
           color: ${currentTheme.text} !important;
           font-size: ${fontSize}px !important;
-          line-height: ${effectiveLineHeight} !important;
           writing-mode: ${writingMode} !important;
           margin: 0 !important;
           padding: ${layoutMode === 'paged' ? 0 : paddingStyle} !important;
@@ -373,7 +384,7 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
         p {
           margin: 0 !important;
           margin-bottom: ${isVertical ? '0' : '1.25em'} !important;
-          margin-left: ${isVertical ? '1.25em' : '0'} !important;
+          margin-left: 0 !important;
           text-indent: 2em !important;
           line-height: ${effectiveLineHeight} !important;
         }
@@ -766,8 +777,11 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
         <iframe
           ref={iframeRef}
           title="Epub Content"
-          className="w-full h-full border-none"
-          style={{ backgroundColor: THEME_STYLES[theme].bg }}
+          className="h-full border-none transition-all duration-150"
+          style={{
+            width: verticalIframeWidth,
+            backgroundColor: THEME_STYLES[theme].bg,
+          }}
           sandbox="allow-same-origin allow-scripts"
         />
 
