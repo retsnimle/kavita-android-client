@@ -284,14 +284,16 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
+            writing-mode: ${writingMode} !important;
           }
           #kavita-book-wrapper {
             column-width: 100vw !important;
             column-gap: 0px !important;
             column-fill: auto !important;
             height: 100vh !important;
+            max-height: 100vh !important;
             box-sizing: border-box !important;
-            padding: ${isVertical ? `24px 0` : `16px 0`} !important;
+            padding: ${isVertical ? `28px ${paddingX}px 28px ${paddingX}px` : `24px ${paddingX}px 24px ${paddingX}px`} !important;
             transform: translateX(0px);
             will-change: transform;
           }
@@ -334,6 +336,9 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
         #kavita-book-wrapper.is-ready {
           opacity: 1 !important;
         }
+        #kavita-book-wrapper p, #kavita-book-wrapper div, #kavita-book-wrapper section, #kavita-book-wrapper article {
+          max-height: none !important;
+        }
         ${pagedCss}
         img {
           max-width: 100% !important;
@@ -342,7 +347,10 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
           margin: 16px auto !important;
         }
         a { color: #10b981 !important; text-decoration: underline !important; cursor: pointer !important; }
-        p { ${layoutMode === 'paged' && isVertical ? 'margin: 0 !important;' : 'margin-bottom: 1.25em !important;'} text-indent: 2em !important; }
+        p {
+          margin: ${layoutMode === 'paged' && isVertical ? '0 0 0 1.25em' : '0 0 1.25em 0'} !important;
+          text-indent: 2em !important;
+        }
       </style>
     `;
 
@@ -684,8 +692,8 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
         className="flex-1 w-full h-full relative flex items-center justify-center overflow-hidden transition-all duration-200"
         style={{
           backgroundColor: THEME_STYLES[theme].bg,
-          paddingLeft: layoutMode === 'paged' ? `${paddingX}px` : 0,
-          paddingRight: layoutMode === 'paged' ? `${paddingX}px` : 0,
+          paddingLeft: 0,
+          paddingRight: 0,
         }}
         onClick={() => {
           if (layoutMode === 'scroll') {
