@@ -247,9 +247,13 @@ class ProgressReconciler {
 
     const remotePage = remote?.pageNum ?? remote?.pagesRead ?? remote?.page ?? null;
     const remoteScrollId = remote?.bookScrollId ?? null;
-    // Kavita 伺服器回傳的時間戳為 ISO 字串（UTC），轉為毫秒
+    // Kavita 伺服器回傳的時間戳為 ISO 字串（UTC），若無時區後綴補上 'Z' 防止被 JS 誤判為本地時區
     const remoteTs = remote?.lastModifiedUtc
-      ? new Date(remote.lastModifiedUtc).getTime()
+      ? new Date(
+          remote.lastModifiedUtc.endsWith('Z') || remote.lastModifiedUtc.includes('+')
+            ? remote.lastModifiedUtc
+            : `${remote.lastModifiedUtc}Z`
+        ).getTime()
       : 0;
     const localTs = local?.timestamp ?? 0;
     const localPage = local?.page ?? null;
