@@ -133,11 +133,29 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
     calculatePages,
   } = pagination;
 
-  // 當骨架解析完成時，初始化雙向有效進度
+  const [isProgressReady, setIsProgressReady] = useState<boolean>(false);
+
   useEffect(() => {
+    setIsProgressReady(false);
+  }, [chapterId]);
+
+  // 當骨架解析完成時，初始化雙向有效進度，對齊完成後才標記就緒（徹底杜絕搶先渲染封面）
+  useEffect(() => {
+    let mounted = true;
     if (sections.length > 0) {
-      initEffectiveProgress(sections.length);
+      initEffectiveProgress(sections.length)
+        .catch((err) => {
+          console.warn('初始化閱讀進度失敗:', err);
+        })
+        .finally(() => {
+          if (mounted) {
+            setIsProgressReady(true);
+          }
+        });
     }
+    return () => {
+      mounted = false;
+    };
   }, [sections.length, initEffectiveProgress]);
 
   // 錨點平滑滾動
@@ -460,11 +478,13 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
     isRestoringProgressRef,
   ]);
 
+  const isReaderReady = !isLoading && isProgressReady && sections.length > 0;
+
   useEffect(() => {
-    if (!isLoading && sections.length > 0) {
+    if (isReaderReady) {
       renderCurrentSection();
     }
-  }, [isLoading, renderCurrentSection, sections.length]);
+  }, [isReaderReady, renderCurrentSection]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col select-none overflow-hidden">
@@ -505,13 +525,13 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
           }
         }}
       >
-        {isLoading && (
+        {!isReaderReady && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black text-zinc-400 text-sm">
             <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
             <span>載入 EPUB 章節中...</span>
           </div>
         )}
-        {isSectionLoading && !isLoading && (
+        {isSectionLoading && isReaderReady && (
           <div className="absolute top-4 right-4 z-30 bg-zinc-900/80 px-3 py-1 rounded-full text-xs text-emerald-400 flex items-center space-x-1.5 backdrop-blur-sm shadow">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             <span>渲染章節中...</span>
@@ -523,11 +543,6 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
           className="w-full h-full border-none"
           style={{ backgroundColor: THEME_STYLES[theme].bg }}
           sandbox="allow-same-origin"
-          onLoad={() => {
-            if (!isLoading && sections.length > 0) {
-              renderCurrentSection();
-            }
-          }}
         />
 
         {/* 單欄模式頂層透明點擊翻頁熱區 */}
