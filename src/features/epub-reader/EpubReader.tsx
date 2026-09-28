@@ -277,28 +277,47 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
 
     const pagedCss =
       layoutMode === 'paged'
-        ? `
+        ? isVertical
+          ? `
           html, body {
             overflow: hidden !important;
-            inline-size: 100% !important;
-            block-size: 100% !important;
             height: 100% !important;
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
-            writing-mode: ${writingMode} !important;
+            writing-mode: vertical-rl !important;
           }
           #kavita-book-wrapper {
-            column-width: 100vw !important;
-            column-gap: 0px !important;
+            column-width: calc(100vh - 56px) !important;
+            column-gap: 56px !important;
             column-fill: auto !important;
-            inline-size: 100% !important;
-            block-size: 100% !important;
+            width: 100vw !important;
             height: 100vh !important;
-            max-height: 100vh !important;
             box-sizing: border-box !important;
-            padding-block: ${isVertical ? '28px' : '24px'} !important;
-            padding-inline: ${paddingX}px !important;
+            padding: 28px ${paddingX}px !important;
+            margin: 0 !important;
+            transform: translateX(0px);
+            will-change: transform;
+          }
+        `
+          : `
+          html, body {
+            overflow: hidden !important;
+            height: 100% !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            writing-mode: horizontal-tb !important;
+          }
+          #kavita-book-wrapper {
+            column-width: calc(100vw - ${2 * paddingX}px) !important;
+            column-gap: ${2 * paddingX}px !important;
+            column-fill: auto !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            box-sizing: border-box !important;
+            padding: 24px ${paddingX}px !important;
+            margin: 0 !important;
             transform: translateX(0px);
             will-change: transform;
           }
@@ -341,25 +360,31 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
         #kavita-book-wrapper.is-ready {
           opacity: 1 !important;
         }
-        #kavita-book-wrapper p, #kavita-book-wrapper div, #kavita-book-wrapper section, #kavita-book-wrapper article {
-          max-height: none !important;
-          max-block-size: none !important;
-          box-sizing: border-box !important;
-        }
         ${pagedCss}
-        img {
+        img, svg, video {
           max-width: 100% !important;
-          max-inline-size: 100% !important;
+          max-height: 100% !important;
           height: auto !important;
+          width: auto !important;
+          object-fit: contain !important;
           display: block !important;
-          margin: 16px auto !important;
+          margin: ${isVertical ? 'auto 16px' : '16px auto'} !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
         }
         a { color: #10b981 !important; text-decoration: underline !important; cursor: pointer !important; }
         p {
           margin: 0 !important;
-          margin-block-end: 1.25em !important;
+          margin-bottom: ${isVertical ? '0' : '1.25em'} !important;
+          margin-left: ${isVertical ? '1.25em' : '0'} !important;
           text-indent: 2em !important;
           line-height: ${effectiveLineHeight} !important;
+        }
+        h1, h2, h3, h4, h5, h6 {
+          margin: 0 !important;
+          margin-bottom: ${isVertical ? '0' : '1em'} !important;
+          margin-left: ${isVertical ? '1em' : '0'} !important;
+          line-height: 1.4 !important;
         }
       </style>
     `;
@@ -374,19 +399,37 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
           function reportReady() {
             if (reported) return;
             reported = true;
+
+            var clientW = document.documentElement.clientWidth || window.innerWidth || 0;
+            var clientH = document.documentElement.clientHeight || window.innerHeight || 0;
+
+            var rangeWidth = 0;
+            try {
+              if (wrapper) {
+                var range = document.createRange();
+                range.selectNodeContents(wrapper);
+                var rRect = range.getBoundingClientRect();
+                if (rRect && rRect.width) {
+                  rangeWidth = Math.ceil(rRect.width);
+                }
+              }
+            } catch (e) {}
+
             var scrollW = Math.max(
+              rangeWidth,
               wrapper ? (wrapper.getBoundingClientRect ? wrapper.getBoundingClientRect().width : 0) : 0,
               wrapper ? wrapper.scrollWidth : 0,
               document.documentElement.scrollWidth || 0,
-              document.body.scrollWidth || 0
+              document.body.scrollWidth || 0,
+              clientW
             );
+
             var scrollH = Math.max(
               wrapper ? wrapper.scrollHeight : 0,
               document.documentElement.scrollHeight || 0,
-              document.body.scrollHeight || 0
+              document.body.scrollHeight || 0,
+              clientH
             );
-            var clientW = document.documentElement.clientWidth || window.innerWidth || 0;
-            var clientH = document.documentElement.clientHeight || window.innerHeight || 0;
 
             window.parent.postMessage({
               type: 'KAVITA_LAYOUT_READY',
