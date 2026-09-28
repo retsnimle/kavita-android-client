@@ -170,6 +170,7 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
     totalVirtualPages,
     turnPage,
     calculatePages,
+    virtualPageIndexRef,
   } = pagination;
 
   const [isProgressReady, setIsProgressReady] = useState<boolean>(false);
@@ -451,7 +452,10 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
     const targetScroll = pendingScrollTopRef.current !== null ? pendingScrollTopRef.current : currentActualScroll;
     pendingScrollTopRef.current = null;
 
-    const targetVirtual = initialVirtualTargetRef.current;
+    const targetVirtual =
+      initialVirtualTargetRef.current !== null
+        ? initialVirtualTargetRef.current
+        : virtualPageIndexRef.current;
     initialVirtualTargetRef.current = null;
 
     if (layoutMode === 'scroll') {
@@ -461,6 +465,10 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
     // 註冊佈局就緒回調（由 iframe postMessage 驅動）
     onLayoutReadyRef.current = (data: { scrollWidth: number; clientWidth: number }) => {
       if (currentReqId !== sectionRequestIdRef.current) return;
+      // 清除定時器（包含 safetyTimer），防止二度重複跳轉
+      renderTimerIdsRef.current.forEach((id) => clearTimeout(id));
+      renderTimerIdsRef.current = [];
+
       const currentDoc = getIframeDoc();
       const currentWin = iframeRef.current?.contentWindow;
       if (!currentDoc || !currentWin) return;
@@ -503,7 +511,7 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
       iframeDoc.addEventListener('wheel', blockScroll, { passive: false });
     }
 
-    // iframe 內部只保留超連結攔截，翻頁交由外層統一熱區
+    // iframe 內部點擊處理：超連結跳轉 + 雙軌翻頁/切換選單支援
     iframeDoc.onclick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       const anchor = target?.closest('a');
@@ -513,7 +521,32 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
           e.preventDefault();
           e.stopPropagation();
           handleLinkClick(href);
+          return;
         }
+      }
+
+      if (layoutMode === 'paged') {
+        const clickX = e.clientX;
+        const screenWidth = iframeDoc.documentElement.clientWidth || window.innerWidth;
+        const ratio = clickX / screenWidth;
+
+        if (ratio < 0.28) {
+          if (isVertical) {
+            turnPage(iframeDoc, screenWidth, 'next');
+          } else {
+            turnPage(iframeDoc, screenWidth, 'prev');
+          }
+        } else if (ratio > 0.72) {
+          if (isVertical) {
+            turnPage(iframeDoc, screenWidth, 'prev');
+          } else {
+            turnPage(iframeDoc, screenWidth, 'next');
+          }
+        } else {
+          setShowControls((prev) => !prev);
+        }
+      } else {
+        setShowControls((prev) => !prev);
       }
     };
 
@@ -595,23 +628,17 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
   const renderCurrentSectionRef = useRef(renderCurrentSection);
   renderCurrentSectionRef.current = renderCurrentSection;
 
-  // 1. 初次載入就緒時渲染
+  // 1. 初次載入就緒或切換章節時渲染（單一精確進入點，杜絕重複執行覆蓋進度）
   useEffect(() => {
-    if (isReaderReady && !initialRenderDoneRef.current) {
-      initialRenderDoneRef.current = true;
-      renderCurrentSectionRef.current();
-    }
-  }, [isReaderReady]);
-
-  // 2. 切換章節時渲染
-  useEffect(() => {
-    if (isReaderReady && initialRenderDoneRef.current && lastRenderedSectionRef.current !== currentSectionIndex) {
+    if (!isReaderReady) return;
+    if (lastRenderedSectionRef.current !== currentSectionIndex) {
       lastRenderedSectionRef.current = currentSectionIndex;
+      initialRenderDoneRef.current = true;
       renderCurrentSectionRef.current();
     }
   }, [isReaderReady, currentSectionIndex]);
 
-  // 3. 變更排版或主題設定時重新渲染
+  // 2. 變更排版或主題設定時重新渲染
   useEffect(() => {
     if (isReaderReady && initialRenderDoneRef.current) {
       renderCurrentSectionRef.current();
