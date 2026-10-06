@@ -160,50 +160,63 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
     }
   }, [mode, isLoading, totalPages]);
 
-  // Webtoon 模式監聽滾動以即時計算目前可視頁碼並防抖上報
+  // Webtoon 模式使用 IntersectionObserver 高效即時判定可視頁碼並上報進度
   useEffect(() => {
-    if (mode !== 'webtoon') return;
+    if (mode !== 'webtoon' || isLoading || totalPages === 0) return;
     const container = containerRef.current;
     if (!container) return;
 
-    let timer: any = null;
-    const handleScroll = () => {
-      if (isRestoringScrollRef.current) return;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (isRestoringScrollRef.current || !container) return;
-        const containerRect = container.getBoundingClientRect();
-        const middleY = containerRect.top + containerRect.height / 2;
+    const visibleRatios = new Map<number, number>();
 
-        let closestPage = 0;
-        let minDistance = Infinity;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (isRestoringScrollRef.current) return;
 
-        for (let i = 0; i < totalPages; i++) {
-          const el = document.getElementById(`webtoon-page-${i}`);
-          if (el) {
-            const rect = el.getBoundingClientRect();
-            const elCenter = (rect.top + rect.bottom) / 2;
-            const dist = Math.abs(elCenter - middleY);
-            if (dist < minDistance) {
-              minDistance = dist;
-              closestPage = i;
+        entries.forEach((entry) => {
+          const pageAttr = entry.target.getAttribute('data-page-index');
+          if (pageAttr !== null) {
+            const pageIdx = parseInt(pageAttr, 10);
+            if (!isNaN(pageIdx)) {
+              if (entry.isIntersecting) {
+                visibleRatios.set(pageIdx, entry.intersectionRatio);
+              } else {
+                visibleRatios.delete(pageIdx);
+              }
             }
           }
-        }
+        });
 
-        if (closestPage !== currentPage) {
-          setCurrentPage(closestPage);
-          progressReconciler.updateProgressOptimistic(seriesId, volumeId, chapterId, closestPage);
-        }
-      }, 250);
-    };
+        if (visibleRatios.size === 0) return;
 
-    container.addEventListener('scroll', handleScroll, { passive: true });
+        // 找出可視比例最高（或最主要呈現）的頁面
+        let bestPage = -1;
+        let maxRatio = -1;
+        visibleRatios.forEach((ratio, pageIdx) => {
+          if (ratio > maxRatio) {
+            maxRatio = ratio;
+            bestPage = pageIdx;
+          }
+        });
+
+        if (bestPage >= 0 && bestPage !== currentPage) {
+          setCurrentPage(bestPage);
+          progressReconciler.updateProgressOptimistic(seriesId, volumeId, chapterId, bestPage);
+        }
+      },
+      {
+        root: container,
+        threshold: [0, 0.2, 0.4, 0.6, 0.8, 1.0],
+      }
+    );
+
+    // 尋找所有帶有 data-page-index 的圖片元素
+    const pageElements = container.querySelectorAll('[data-page-index]');
+    pageElements.forEach((el) => observer.observe(el));
+
     return () => {
-      container.removeEventListener('scroll', handleScroll);
-      if (timer) clearTimeout(timer);
+      observer.disconnect();
     };
-  }, [mode, totalPages, currentPage, seriesId, volumeId, chapterId]);
+  }, [mode, isLoading, totalPages, currentPage, seriesId, volumeId, chapterId]);
 
   // 4. 點擊翻頁邏輯
   const handleScreenClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -377,6 +390,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
               return (
                 <img
                   id={`webtoon-page-${idx}`}
+                  data-page-index={idx}
                   key={idx}
                   src={url}
                   alt={`Page ${idx + 1}`}

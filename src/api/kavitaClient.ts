@@ -101,11 +101,15 @@ class KavitaClient {
       method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
       params?: Record<string, string | number | boolean>;
       body?: any;
+      connectTimeout?: number;
+      readTimeout?: number;
     } = {}
   ): Promise<T> {
     const url = this.buildUrl(path, options.params);
     const headers = this.getHeaders();
     const method = options.method || 'GET';
+    const connectTimeout = options.connectTimeout ?? 10000;
+    const readTimeout = options.readTimeout ?? 30000;
 
     if (Capacitor.isNativePlatform()) {
       try {
@@ -114,6 +118,8 @@ class KavitaClient {
           method,
           headers,
           data: options.body,
+          connectTimeout,
+          readTimeout,
         });
 
         if (res.status >= 400) {
@@ -127,16 +133,28 @@ class KavitaClient {
         throw new Error(e.message || '原生連線失敗，請確認伺服器網址是否正確');
       }
     } else {
-      const res = await fetch(url, {
-        method,
-        headers,
-        body: options.body ? JSON.stringify(options.body) : undefined,
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`請求失敗 (${res.status}): ${errText || res.statusText}`);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), readTimeout);
+      try {
+        const res = await fetch(url, {
+          method,
+          headers,
+          body: options.body ? JSON.stringify(options.body) : undefined,
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`請求失敗 (${res.status}): ${errText || res.statusText}`);
+        }
+        return await res.json();
+      } catch (e: any) {
+        clearTimeout(timer);
+        if (e.name === 'AbortError') {
+          throw new Error(`網路請求超時 (${readTimeout}ms)`);
+        }
+        throw e;
       }
-      return await res.json();
     }
   }
 
@@ -313,7 +331,7 @@ class KavitaClient {
   }
 
   // 下載單頁漫畫圖片 Blob
-  async fetchChapterImageBlob(chapterId: number, page: number): Promise<Blob> {
+  async fetchChapterImageBlob(chapterId: number, page: number, timeoutMs: number = 30000): Promise<Blob> {
     const url = this.getChapterImageUrl(chapterId, page);
     if (Capacitor.isNativePlatform()) {
       const res = await CapacitorHttp.request({
@@ -321,17 +339,28 @@ class KavitaClient {
         method: 'GET',
         headers: this.getHeaders(),
         responseType: 'blob',
+        connectTimeout: 10000,
+        readTimeout: timeoutMs,
       });
       return base64ToBlob(res.data, 'image/jpeg');
     } else {
-      const res = await fetch(url, { headers: this.getHeaders() });
-      if (!res.ok) throw new Error(`下載圖片失敗 P.${page} (${res.status})`);
-      return await res.blob();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { headers: this.getHeaders(), signal: controller.signal });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error(`下載圖片失敗 P.${page} (${res.status})`);
+        return await res.blob();
+      } catch (e: any) {
+        clearTimeout(timer);
+        if (e.name === 'AbortError') throw new Error(`下載圖片超時 P.${page}`);
+        throw e;
+      }
     }
   }
 
   // 下載整本 EPUB 二進位檔案 (Kavita 官方端點: GET /api/Download/chapter?chapterId={chapterId})
-  async fetchChapterEpubBlob(chapterId: number): Promise<Blob> {
+  async fetchChapterEpubBlob(chapterId: number, timeoutMs: number = 120000): Promise<Blob> {
     const url = this.buildUrl('/api/Download/chapter', { chapterId });
     if (Capacitor.isNativePlatform()) {
       const res = await CapacitorHttp.request({
@@ -339,12 +368,23 @@ class KavitaClient {
         method: 'GET',
         headers: this.getHeaders(),
         responseType: 'blob',
+        connectTimeout: 10000,
+        readTimeout: timeoutMs,
       });
       return base64ToBlob(res.data, 'application/epub+zip');
     } else {
-      const res = await fetch(url, { headers: this.getHeaders() });
-      if (!res.ok) throw new Error(`下載 EPUB 失敗 (${res.status})`);
-      return await res.blob();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { headers: this.getHeaders(), signal: controller.signal });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error(`下載 EPUB 失敗 (${res.status})`);
+        return await res.blob();
+      } catch (e: any) {
+        clearTimeout(timer);
+        if (e.name === 'AbortError') throw new Error(`下載 EPUB 超時 (${timeoutMs}ms)`);
+        throw e;
+      }
     }
   }
 
@@ -370,7 +410,7 @@ class KavitaClient {
   }
 
   // 按需取得單一章節的 HTML 內容（純文字 HTML，通常僅 10~50 KB，瞬間秒開）
-  async getBookPage(chapterId: number, page: number): Promise<string> {
+  async getBookPage(chapterId: number, page: number, timeoutMs: number = 30000): Promise<string> {
     const url = this.buildUrl(`/api/book/${chapterId}/book-page`, { page });
     if (Capacitor.isNativePlatform()) {
       const res = await CapacitorHttp.request({
@@ -378,12 +418,23 @@ class KavitaClient {
         method: 'GET',
         headers: this.getHeaders(),
         responseType: 'text',
+        connectTimeout: 10000,
+        readTimeout: timeoutMs,
       });
       return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
     } else {
-      const res = await fetch(url, { headers: this.getHeaders() });
-      if (!res.ok) throw new Error(`載入章節頁面失敗 (${res.status})`);
-      return await res.text();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { headers: this.getHeaders(), signal: controller.signal });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error(`載入章節頁面失敗 (${res.status})`);
+        return await res.text();
+      } catch (e: any) {
+        clearTimeout(timer);
+        if (e.name === 'AbortError') throw new Error(`載入章節頁面超時`);
+        throw e;
+      }
     }
   }
 

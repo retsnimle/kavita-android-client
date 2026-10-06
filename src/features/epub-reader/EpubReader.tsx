@@ -33,7 +33,7 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
   const sectionRequestIdRef = useRef<number>(0);
   const onLayoutReadyRef = useRef<((data: any) => void) | null>(null);
 
-  // 監聽來自 iframe 內部 reader-engine 的排版就緒事件
+  // 監聽來自 iframe 內部 reader-engine 的排版就緒事件與組件卸載清理
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (e.data && e.data.type === 'KAVITA_LAYOUT_READY') {
@@ -47,6 +47,13 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
     window.addEventListener('message', handleMessage);
     return () => {
       window.removeEventListener('message', handleMessage);
+      // 清空所有排版與安全計時器
+      renderTimerIdsRef.current.forEach((id) => clearTimeout(id));
+      renderTimerIdsRef.current = [];
+      // 卸載時顯式釋放 iframe 記憶體
+      if (iframeRef.current) {
+        iframeRef.current.src = 'about:blank';
+      }
     };
   }, []);
 
