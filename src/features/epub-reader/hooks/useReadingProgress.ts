@@ -138,12 +138,13 @@ export const useReadingProgress = ({
       targetVirtual: number | 'last' = 0
     ) => {
       if (newIndex < 0 || newIndex >= sectionsLength || newIndex === currentSectionIndex) return;
-      pendingTargetXPathRef.current = targetVirtual === 'last' ? 'last' : '/body/p[1]';
+      // 切換至新章節頂端時不指定特定元素 XPath，由 pendingScrollTopRef = 0 確保完整捲動至章節頂端
+      pendingTargetXPathRef.current = targetVirtual === 'last' ? 'last' : null;
       initialVirtualTargetRef.current = targetVirtual;
       pendingScrollTopRef.current = targetVirtual === 'last' ? 9999999 : 0;
       setCurrentSectionIndex(newIndex);
       if (onSectionChanged) onSectionChanged(newIndex);
-      const scrollId = targetVirtual === 'last' ? 'last' : '/body/p[1]';
+      const scrollId = targetVirtual === 'last' ? 'last' : 'vpage:0';
       progressReconciler.updateProgressOptimistic(seriesId, volumeId, chapterId, newIndex, scrollId);
     },
     [currentSectionIndex, seriesId, volumeId, chapterId, onSectionChanged]
