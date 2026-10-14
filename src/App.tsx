@@ -9,6 +9,7 @@ import { EpubReader } from './features/epub-reader/EpubReader';
 import { progressReconciler } from './core/sync/reconciler';
 import { db } from './core/database/db';
 import { backButtonManager } from './core/navigation/backButtonManager';
+import { appIconManager, type AppIconType } from './core/native/appIcon';
 
 type Tab = 'library' | 'offline' | 'settings';
 
@@ -27,10 +28,30 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('library');
   const [activeReader, setActiveReader] = useState<ActiveReaderState | null>(null);
   const [pendingQueueCount, setPendingQueueCount] = useState<number>(0);
+  const [currentIcon, setCurrentIcon] = useState<AppIconType>('classic');
+  const [isSwitchingIcon, setIsSwitchingIcon] = useState<boolean>(false);
+  const [iconMessage, setIconMessage] = useState<string | null>(null);
 
   const refreshQueueCount = async () => {
     const count = await db.progress_queue.count();
     setPendingQueueCount(count);
+  };
+
+  const handleIconChange = async (target: AppIconType) => {
+    if (target === currentIcon || isSwitchingIcon) return;
+    setIsSwitchingIcon(true);
+    setIconMessage(null);
+    try {
+      await appIconManager.switchIcon(target);
+      setCurrentIcon(target);
+      setIconMessage('圖示已成功切換！桌面啟動器將於數秒內更新。');
+      setTimeout(() => setIconMessage(null), 4000);
+    } catch (err: any) {
+      setIconMessage(`切換失敗：${err?.message || err}`);
+      setTimeout(() => setIconMessage(null), 5000);
+    } finally {
+      setIsSwitchingIcon(false);
+    }
   };
 
   useEffect(() => {
@@ -47,6 +68,10 @@ export const App: React.FC = () => {
     // 監聽待同步離線佇列數量
     refreshQueueCount();
     const interval = setInterval(refreshQueueCount, 3000);
+
+    // 初始化應用程式圖示狀態
+    appIconManager.getCurrentIcon().then(setCurrentIcon);
+
     return () => clearInterval(interval);
   }, []);
 
@@ -102,6 +127,71 @@ export const App: React.FC = () => {
               <p className="text-[11px] text-zinc-500 leading-relaxed">
                 離線時閱讀進度會暫存於本機。一旦連上網路，系統將在翻閱書籍或開啟 App 時自動於背景無感對齊。
               </p>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col space-y-3">
+              <div className="text-xs text-zinc-400 font-medium">應用程式圖示 (Material Design)</div>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                可自由切換以 Kavita 官方深石板色與翡翠綠搭配的 Material You 質感圖示。切換後桌面與標籤頁將即時生效。
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                {/* 方案 A: 經典展開書本 */}
+                <button
+                  type="button"
+                  onClick={() => handleIconChange('classic')}
+                  disabled={isSwitchingIcon}
+                  className={`flex flex-col items-center p-3 rounded-xl border text-left transition-all ${
+                    currentIcon === 'classic'
+                      ? 'border-emerald-500 bg-emerald-500/10 shadow-sm shadow-emerald-500/10'
+                      : 'border-zinc-800 bg-zinc-950/50 hover:border-zinc-700'
+                  }`}
+                >
+                  <img
+                    src="/icons/icon_classic.png"
+                    alt="方案 A (Classic)"
+                    className="w-14 h-14 rounded-2xl shadow-md mb-2 object-cover"
+                  />
+                  <div className="text-xs font-semibold text-zinc-200">幾何展開書本</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5">Classic Material</div>
+                  {currentIcon === 'classic' && (
+                    <span className="mt-1.5 px-2 py-0.5 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 rounded-full">
+                      使用中
+                    </span>
+                  )}
+                </button>
+
+                {/* 方案 B: 幾何翻頁標誌 */}
+                <button
+                  type="button"
+                  onClick={() => handleIconChange('emblem')}
+                  disabled={isSwitchingIcon}
+                  className={`flex flex-col items-center p-3 rounded-xl border text-left transition-all ${
+                    currentIcon === 'emblem'
+                      ? 'border-emerald-500 bg-emerald-500/10 shadow-sm shadow-emerald-500/10'
+                      : 'border-zinc-800 bg-zinc-950/50 hover:border-zinc-700'
+                  }`}
+                >
+                  <img
+                    src="/icons/icon_emblem.png"
+                    alt="方案 B (Emblem)"
+                    className="w-14 h-14 rounded-2xl shadow-md mb-2 object-cover"
+                  />
+                  <div className="text-xs font-semibold text-zinc-200">幾何翻頁標誌</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5">Kavita Emblem</div>
+                  {currentIcon === 'emblem' && (
+                    <span className="mt-1.5 px-2 py-0.5 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 rounded-full">
+                      使用中
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {iconMessage && (
+                <div className="text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 rounded-lg px-2.5 py-1.5 mt-2 animate-fade-in">
+                  {iconMessage}
+                </div>
+              )}
             </div>
 
             <button
