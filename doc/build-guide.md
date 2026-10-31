@@ -113,11 +113,11 @@ Copy-Item "android\app\build\outputs\apk\debug\app-debug.apk" -Destination $targ
 
 ```groovy
 defaultConfig {
-    applicationId "com.kavita.reader"
+    applicationId "io.github.retsnimle.kavitareader"
     minSdkVersion rootProject.ext.minSdkVersion
     targetSdkVersion rootProject.ext.targetSdkVersion
-    versionCode 35          // 整數遞增，確保 Android 系統允許覆蓋安裝
-    versionName "1.0.34"    // 語意化版本號（主要.次要.修訂）
+    versionCode 50          // 整數遞增，確保 Android 系統允許覆蓋安裝
+    versionName "1.0.49"    // 語意化版本號（主要.次要.修訂）
     testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     ...
 }
@@ -139,7 +139,7 @@ adb install -r "E:\PERSONAL\code\kavita-reader-app.apk"
 1. 手機透過 USB 或 Wi-Fi 連線至開發電腦。
 2. 啟動 Kavita Reader App。
 3. 在 PC 上打開 Chrome 或 Edge，輸入網址：`chrome://inspect/#devices`。
-4. 找到 `WebView in com.kavita.reader`，點擊 **inspect** 即可開啟 Chrome 開發者工具，即時檢查 Console 日誌、Network 網路封包與 DOM 結構。
+4. 找到 `WebView in io.github.retsnimle.kavitareader`，點擊 **inspect** 即可開啟 Chrome 開發者工具，即時檢查 Console 日誌、Network 網路封包與 DOM 結構。
 
 ---
 

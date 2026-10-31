@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.kavita.reader',
-  appName: 'Kavita Reader',
+  appId: 'io.github.retsnimle.kavitareader',
+  appName: 'Reader for Kavita',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

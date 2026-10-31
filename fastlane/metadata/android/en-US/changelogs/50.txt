@@ -1,0 +1,4 @@
+- Initial F-Droid release (v1.0.49).
+- Application ID standardized to io.github.retsnimle.kavitareader.
+- Dynamic app icon switching support.
+- Performance enhancements and memory optimizations for Manga & EPUB reader.

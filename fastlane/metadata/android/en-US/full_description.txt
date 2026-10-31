@@ -1,0 +1,9 @@
+Reader for Kavita is an open-source, lightweight companion client designed specifically for self-hosted Kavita media servers.
+
+Features:
+- Dedicated Manga & Comic Reader: Seamless continuous scroll and paged modes with customizable reading directions.
+- Advanced EPUB Reader: Clean typography, vertical and horizontal pagination, font customization, and instant section jumping.
+- Offline Bookshelf: Download books and chapters directly to your device for smooth offline reading.
+- Full Progress Sync: Two-way synchronization with your Kavita server to ensure reading progress is always preserved.
+- Dynamic App Icons: Switch between classic and modern emblem icons.
+- Privacy-Focused: No ads, no analytics, no third-party tracking. Completely open source under the MIT License.

@@ -12,7 +12,7 @@
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
-            android:name=".MainActivity"
+            android:name="com.kavita.reader.MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
@@ -21,8 +21,8 @@
 
         <!-- 方案 A：經典幾何展開書本 (預設啟用) -->
         <activity-alias
-            android:name=".MainActivityClassic"
-            android:targetActivity=".MainActivity"
+            android:name="${applicationId}.MainActivityClassic"
+            android:targetActivity="com.kavita.reader.MainActivity"
             android:icon="@mipmap/ic_launcher_classic"
             android:roundIcon="@mipmap/ic_launcher_classic_round"
             android:enabled="true"
@@ -35,8 +35,8 @@
 
         <!-- 方案 B：K字幾何翻頁標誌 (預設停用) -->
         <activity-alias
-            android:name=".MainActivityEmblem"
-            android:targetActivity=".MainActivity"
+            android:name="${applicationId}.MainActivityEmblem"
+            android:targetActivity="com.kavita.reader.MainActivity"
             android:icon="@mipmap/ic_launcher_emblem"
             android:roundIcon="@mipmap/ic_launcher_emblem_round"
             android:enabled="false"

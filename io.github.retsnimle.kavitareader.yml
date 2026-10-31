@@ -1,0 +1,33 @@
+Categories:
+  - Reading
+License: MIT
+AuthorName: retsnimle
+SourceCode: https://github.com/retsnimle/kavita-android-client
+IssueTracker: https://github.com/retsnimle/kavita-android-client/issues
+
+AutoName: Reader for Kavita
+RepoType: git
+Repo: https://github.com/retsnimle/kavita-android-client.git
+
+AutoUpdateMode: Version %v
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.49
+CurrentVersionCode: 50
+
+Builds:
+  - versionName: 1.0.49
+    versionCode: 50
+    commit: v1.0.49
+    subdir: android
+    sudo:
+      - apt-get update
+      - apt-get install -y nodejs npm
+    init:
+      - cd ..
+      - npm ci
+      - npm run build
+      - npx cap sync android
+      - cd android
+    gradle:
+      - yes
+    output: app/build/outputs/apk/release/app-release-unsigned.apk

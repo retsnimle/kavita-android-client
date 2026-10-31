@@ -25,6 +25,8 @@ android/app/release/
 android/app/debug/
 *.apk
 *.aab
+*.keystore
+*.jks
 
 # Editor directories and files
 .vscode/*

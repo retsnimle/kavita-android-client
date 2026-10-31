@@ -1,0 +1,4 @@
+- 首次 F-Droid 發行版本（v1.0.49）。
+- Application ID 規範化為 io.github.retsnimle.kavitareader。
+- 支援動態切換雙風格 App 桌面圖示。
+- 漫畫與 EPUB 閱讀器記憶體與渲染效能最佳化。
