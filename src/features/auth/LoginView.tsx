@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Server, Key, User, Lock, ArrowRight } from 'lucide-react';
+import { Server, Key, User, Lock, ArrowRight, Globe } from 'lucide-react';
 import { kavitaClient } from '../../api/kavitaClient';
 import { db } from '../../core/database/db';
+import { useI18n } from '../../core/i18n';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
+  const { t, locale, setLocale } = useI18n();
   const [baseUrl, setBaseUrl] = useState(
     localStorage.getItem('kavita_base_url') || 'http://localhost:5000'
   );
@@ -27,10 +29,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       kavitaClient.setServer(baseUrl);
 
       if (authMode === 'password') {
-        if (!username || !password) throw new Error('請輸入使用者名稱與密碼');
+        if (!username || !password) throw new Error(t('auth.errorEmptyUserPass'));
         await kavitaClient.login(username, password);
       } else {
-        if (!apiKey) throw new Error('請輸入 API Key');
+        if (!apiKey) throw new Error(t('auth.errorEmptyApiKey'));
         await kavitaClient.authenticateApiKey(apiKey);
       }
 
@@ -47,21 +49,36 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
       onLoginSuccess();
     } catch (err: any) {
-      setErrorMsg(err.message || '連線至 Kavita 伺服器失敗');
+      setErrorMsg(err.message || t('auth.errorConnectFailed'));
     } finally {
       setIsLoading(false);
     }
   };
 
+  const toggleLanguage = () => {
+    setLocale(locale === 'zh-TW' ? 'en-US' : 'zh-TW');
+  };
+
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col justify-center items-center px-4 py-8 text-zinc-100">
+    <div className="min-h-screen bg-zinc-950 flex flex-col justify-center items-center px-4 py-8 text-zinc-100 relative">
+      {/* 語言切換浮動按鈕 */}
+      <button
+        type="button"
+        onClick={toggleLanguage}
+        className="absolute top-4 right-4 flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-medium text-zinc-400 hover:text-white transition-colors"
+        style={{ marginTop: 'var(--sat)' }}
+      >
+        <Globe className="w-3.5 h-3.5" />
+        <span>{locale === 'zh-TW' ? 'English' : '繁體中文'}</span>
+      </button>
+
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
         <div className="flex flex-col items-center mb-6">
           <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center text-emerald-400 mb-3 shadow-inner">
             <Server className="w-7 h-7" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight">連接 Kavita 伺服器</h1>
-          <p className="text-xs text-zinc-400 mt-1">打造極致沉浸的 Android 離線閱讀體驗</p>
+          <h1 className="text-xl font-bold tracking-tight">{t('auth.title')}</h1>
+          <p className="text-xs text-zinc-400 mt-1">{t('auth.subtitle')}</p>
         </div>
 
         {errorMsg && (
@@ -73,14 +90,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
           {/* 伺服器網址 */}
           <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1">伺服器位址 (URL)</label>
+            <label className="block text-xs font-medium text-zinc-300 mb-1">{t('auth.serverUrl')}</label>
             <div className="relative">
               <Server className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
               <input
                 type="url"
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder="http://192.168.1.100:5000"
+                placeholder={t('auth.serverUrlPlaceholder')}
                 required
                 className="w-full pl-9 pr-3 py-2 bg-zinc-800/80 border border-zinc-700/60 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors"
               />
@@ -98,7 +115,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
-              帳號密碼登入
+              {t('auth.modePassword')}
             </button>
             <button
               type="button"
@@ -109,27 +126,27 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
-              API Key 認證
+              {t('auth.modeApiKey')}
             </button>
           </div>
 
           {authMode === 'password' ? (
             <>
               <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1">使用者名稱</label>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">{t('auth.username')}</label>
                 <div className="relative">
                   <User className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
                   <input
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Username"
+                    placeholder={t('auth.usernamePlaceholder')}
                     className="w-full pl-9 pr-3 py-2 bg-zinc-800/80 border border-zinc-700/60 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1">密碼</label>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">{t('auth.password')}</label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
                   <input
@@ -144,14 +161,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </>
           ) : (
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1">Kavita API Key</label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1">{t('auth.apiKey')}</label>
               <div className="relative">
                 <Key className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
                 <input
                   type="text"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Kavita API Key"
+                  placeholder={t('auth.apiKeyPlaceholder')}
                   className="w-full pl-9 pr-3 py-2 bg-zinc-800/80 border border-zinc-700/60 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -164,10 +181,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             className="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold rounded-xl text-sm flex items-center justify-center space-x-2 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
           >
             {isLoading ? (
-              <span>連線中...</span>
+              <span>{t('auth.connecting')}</span>
             ) : (
               <>
-                <span>連線並進入書庫</span>
+                <span>{t('auth.connectAndEnter')}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}

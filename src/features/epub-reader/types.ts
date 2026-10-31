@@ -39,7 +39,18 @@ export const normalizeWeight = (w?: string | number): number => {
   return isNaN(parsed) ? 400 : parsed;
 };
 
-export const getWeightName = (w: number): string => {
+export const getWeightName = (w: number, t?: (k: any) => string): string => {
+  if (t) {
+    if (w <= 100) return t('epub.weightThin');
+    if (w <= 200) return t('epub.weightExtraLight');
+    if (w <= 300) return t('epub.weightLight');
+    if (w <= 400) return t('epub.weightRegular');
+    if (w <= 500) return t('epub.weightMedium');
+    if (w <= 600) return t('epub.weightSemiBold');
+    if (w <= 700) return t('epub.weightBold');
+    if (w <= 800) return t('epub.weightExtraBold');
+    return t('epub.weightBlack');
+  }
   if (w <= 100) return '極細 (100)';
   if (w <= 200) return '特細 (200)';
   if (w <= 300) return '細體 (300)';

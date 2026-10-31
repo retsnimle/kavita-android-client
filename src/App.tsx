@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, FolderDown, Settings } from 'lucide-react';
+import { BookOpen, FolderDown, Settings, Globe } from 'lucide-react';
 import { kavitaClient } from './api/kavitaClient';
 import { LoginView } from './features/auth/LoginView';
 import { LibraryView } from './features/library/LibraryView';
@@ -10,9 +10,9 @@ import { progressReconciler } from './core/sync/reconciler';
 import { db } from './core/database/db';
 import { backButtonManager } from './core/navigation/backButtonManager';
 import { appIconManager, type AppIconType } from './core/native/appIcon';
+import { useI18n, type Locale } from './core/i18n';
 
 type Tab = 'library' | 'offline' | 'settings';
-
 
 interface ActiveReaderState {
   seriesId: number;
@@ -24,6 +24,7 @@ interface ActiveReaderState {
 }
 
 export const App: React.FC = () => {
+  const { t, locale, setLocale } = useI18n();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<Tab>('library');
   const [activeReader, setActiveReader] = useState<ActiveReaderState | null>(null);
@@ -44,14 +45,19 @@ export const App: React.FC = () => {
     try {
       await appIconManager.switchIcon(target);
       setCurrentIcon(target);
-      setIconMessage('圖示已成功切換！桌面啟動器將於數秒內更新。');
+      setIconMessage(t('settings.iconSuccess'));
       setTimeout(() => setIconMessage(null), 4000);
     } catch (err: any) {
-      setIconMessage(`切換失敗：${err?.message || err}`);
+      setIconMessage(t('settings.iconFailed', { error: err?.message || err }));
       setTimeout(() => setIconMessage(null), 5000);
     } finally {
       setIsSwitchingIcon(false);
     }
+  };
+
+  const handleLanguageChange = (newLocale: Locale) => {
+    if (newLocale === locale) return;
+    setLocale(newLocale);
   };
 
   useEffect(() => {
@@ -85,7 +91,6 @@ export const App: React.FC = () => {
     return unregister;
   }, [activeTab]);
 
-
   const handleLogout = () => {
     localStorage.removeItem('kavita_token');
     localStorage.removeItem('kavita_api_key');
@@ -112,27 +117,67 @@ export const App: React.FC = () => {
         {activeTab === 'offline' && <OfflineShelfView onOpenReader={handleOpenReader} />}
         {activeTab === 'settings' && (
           <div className="flex-1 p-6 overflow-y-auto max-w-md mx-auto w-full flex flex-col space-y-6">
-            <h1 className="text-xl font-bold mt-4">設定與連線資訊</h1>
+            <h1 className="text-xl font-bold mt-4">{t('settings.title')}</h1>
+            
+            {/* 連線與伺服器資訊 */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col space-y-3">
-              <div className="text-xs text-zinc-400">目前伺服器</div>
+              <div className="text-xs text-zinc-400">{t('settings.currentServer')}</div>
               <div className="text-sm font-mono text-emerald-400 break-all">
-                {kavitaClient.getBaseUrl() || '未設定'}
+                {kavitaClient.getBaseUrl() || t('settings.notConfigured')}
               </div>
               <div className="pt-2 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400">
-                <span>離線進度自動同步</span>
+                <span>{t('settings.offlineSync')}</span>
                 <span className="font-mono text-zinc-300">
-                  {pendingQueueCount > 0 ? `佇列暫存 ${pendingQueueCount} 筆 (聯網自動同步)` : '全部已對齊'}
+                  {pendingQueueCount > 0
+                    ? t('settings.queueCount', { count: pendingQueueCount })
+                    : t('settings.allSynced')}
                 </span>
               </div>
               <p className="text-[11px] text-zinc-500 leading-relaxed">
-                離線時閱讀進度會暫存於本機。一旦連上網路，系統將在翻閱書籍或開啟 App 時自動於背景無感對齊。
+                {t('settings.offlineSyncDesc')}
               </p>
             </div>
 
+            {/* 介面語言切換 */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col space-y-3">
-              <div className="text-xs text-zinc-400 font-medium">應用程式圖示 (Material Design)</div>
+              <div className="flex items-center space-x-2 text-xs text-zinc-400 font-medium">
+                <Globe className="w-4 h-4 text-emerald-400" />
+                <span>{t('settings.language')}</span>
+              </div>
               <p className="text-[11px] text-zinc-500 leading-relaxed">
-                可自由切換以 Kavita 官方深石板色與翡翠綠搭配的 Material You 質感圖示。切換後桌面與標籤頁將即時生效。
+                {t('settings.languageDesc')}
+              </p>
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleLanguageChange('zh-TW')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
+                    locale === 'zh-TW'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-sm'
+                      : 'border-zinc-800 bg-zinc-950/50 text-zinc-300 hover:border-zinc-700'
+                  }`}
+                >
+                  {t('settings.langZh')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLanguageChange('en-US')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
+                    locale === 'en-US'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-sm'
+                      : 'border-zinc-800 bg-zinc-950/50 text-zinc-300 hover:border-zinc-700'
+                  }`}
+                >
+                  {t('settings.langEn')}
+                </button>
+              </div>
+            </div>
+
+            {/* 應用程式圖示切換 */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col space-y-3">
+              <div className="text-xs text-zinc-400 font-medium">{t('settings.appIcon')}</div>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                {t('settings.appIconDesc')}
               </p>
               
               <div className="grid grid-cols-2 gap-3 pt-1">
@@ -149,14 +194,14 @@ export const App: React.FC = () => {
                 >
                   <img
                     src="/icons/icon_classic.png"
-                    alt="方案 A (Classic)"
+                    alt={t('settings.iconClassicTitle')}
                     className="w-14 h-14 rounded-2xl shadow-md mb-2 object-cover"
                   />
-                  <div className="text-xs font-semibold text-zinc-200">幾何展開書本</div>
-                  <div className="text-[10px] text-zinc-400 mt-0.5">Classic Material</div>
+                  <div className="text-xs font-semibold text-zinc-200">{t('settings.iconClassicTitle')}</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5">{t('settings.iconClassicSub')}</div>
                   {currentIcon === 'classic' && (
                     <span className="mt-1.5 px-2 py-0.5 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 rounded-full">
-                      使用中
+                      {t('settings.iconInUse')}
                     </span>
                   )}
                 </button>
@@ -174,14 +219,14 @@ export const App: React.FC = () => {
                 >
                   <img
                     src="/icons/icon_emblem.png"
-                    alt="方案 B (Emblem)"
+                    alt={t('settings.iconEmblemTitle')}
                     className="w-14 h-14 rounded-2xl shadow-md mb-2 object-cover"
                   />
-                  <div className="text-xs font-semibold text-zinc-200">幾何翻頁標誌</div>
-                  <div className="text-[10px] text-zinc-400 mt-0.5">Kavita Emblem</div>
+                  <div className="text-xs font-semibold text-zinc-200">{t('settings.iconEmblemTitle')}</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5">{t('settings.iconEmblemSub')}</div>
                   {currentIcon === 'emblem' && (
                     <span className="mt-1.5 px-2 py-0.5 text-[9px] font-medium bg-emerald-500/20 text-emerald-400 rounded-full">
-                      使用中
+                      {t('settings.iconInUse')}
                     </span>
                   )}
                 </button>
@@ -198,7 +243,7 @@ export const App: React.FC = () => {
               onClick={handleLogout}
               className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold rounded-xl transition-colors border border-rose-500/20"
             >
-              登出伺服器
+              {t('settings.logout')}
             </button>
           </div>
         )}
@@ -216,7 +261,7 @@ export const App: React.FC = () => {
           }`}
         >
           <BookOpen className="w-5 h-5" />
-          <span className="text-[10px]">在線書庫</span>
+          <span className="text-[10px]">{t('nav.library')}</span>
         </button>
 
         <button
@@ -226,7 +271,7 @@ export const App: React.FC = () => {
           }`}
         >
           <FolderDown className="w-5 h-5" />
-          <span className="text-[10px]">離線沙盒</span>
+          <span className="text-[10px]">{t('nav.offline')}</span>
         </button>
 
         <button
@@ -236,7 +281,7 @@ export const App: React.FC = () => {
           }`}
         >
           <Settings className="w-5 h-5" />
-          <span className="text-[10px]">設定</span>
+          <span className="text-[10px]">{t('nav.settings')}</span>
         </button>
       </div>
 

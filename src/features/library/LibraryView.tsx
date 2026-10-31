@@ -14,6 +14,7 @@ import { downloadManager, type DownloadProgress } from '../../core/storage/downl
 import { progressReconciler } from '../../core/sync/reconciler';
 import { db } from '../../core/database/db';
 import { backButtonManager } from '../../core/navigation/backButtonManager';
+import { useI18n } from '../../core/i18n';
 import type { ChapterDto, LibraryDto, SeriesDto, VolumeDto } from '../../types/kavita';
 
 
@@ -42,6 +43,7 @@ interface RecentEntry {
 const LAST_LIBRARY_KEY = 'kavita_last_library_id';
 
 export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
+  const { t } = useI18n();
   const [libraries, setLibraries] = useState<LibraryDto[]>([]);
   const [selectedLibraryId, setSelectedLibraryId] = useState<number | null>(() => {
     const saved = localStorage.getItem(LAST_LIBRARY_KEY);
@@ -89,7 +91,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
           seriesName: series.name,
           volumeId: p.volumeId,
           chapterId: p.chapterId,
-          chapterTitle: `第 ${p.page + 1} 頁`,
+          chapterTitle: t('common.pageIndicator', { page: p.page + 1 }),
           format: isEpub ? 'epub' : 'comic',
           pageNum: p.page || 0,
           updatedAt: p.timestamp || 0,
@@ -99,7 +101,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
     } catch (err) {
       console.warn('載入最近閱讀失敗:', err);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadRecent();
@@ -242,12 +244,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
     }
     const numVal = parseFloat(String(ch.number || '0'));
     if (!isNaN(numVal) && !isSentinelStr(ch.number) && numVal > 0 && numVal < 100000) {
-      return `第 ${ch.number} 話`;
+      return t('common.chapterIndicator', { chapter: ch.number || '' });
     }
     if (total === 1) {
       return seriesName;
     }
-    return `第 ${idx + 1} 話`;
+    return t('common.chapterIndicator', { chapter: idx + 1 });
   };
 
   // 6. 下載章節
@@ -319,7 +321,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
           className={`p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 ${
             isSyncing ? 'animate-spin text-emerald-400' : ''
           }`}
-          title="對齊離線進度至伺服器"
+          title={t('library.syncTooltip')}
         >
           <RotateCw className="w-4 h-4" />
         </button>
@@ -335,14 +337,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜尋書籍與漫畫..."
+              placeholder={t('library.searchPlaceholder')}
               className="w-full pl-9 pr-9 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2.5 top-2.5 p-1 rounded-full text-zinc-400 hover:text-white bg-zinc-800/80 active:scale-90 transition-all cursor-pointer"
-                title="清除搜尋"
+                title={t('library.clearSearch')}
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -354,7 +356,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
             <div className="flex flex-col space-y-1.5 pb-0.5">
               <div className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-400">
                 <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                <span>最近閱讀</span>
+                <span>{t('library.recentlyRead')}</span>
               </div>
               <div className="flex space-x-3 overflow-x-auto no-scrollbar py-0.5">
                 {recentlyRead.map((entry) => (
@@ -428,7 +430,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
                           {selectedSeries.name}
                         </h2>
                         <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-                          {selectedSeries.summary || '暫無簡介'}
+                          {selectedSeries.summary || t('library.noSummary')}
                         </p>
                       </div>
                       <div className="flex flex-col space-y-2 mt-2">
@@ -440,7 +442,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
                               ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
                               : 'bg-zinc-800 border-zinc-700 text-zinc-300'
                           }`}>
-                            {isEpub ? 'EPUB 小說' : isPdf ? 'PDF 文檔' : '漫畫 / 畫集'}
+                            {isEpub ? t('common.epubNovel') : isPdf ? t('common.pdfDocument') : t('common.comicFormat')}
                           </span>
                         </div>
                         {firstPlayable && (
@@ -463,7 +465,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
                             className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white font-medium text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer w-fit"
                           >
                             <Play className="w-3.5 h-3.5 fill-current" />
-                            <span>立即開始閱讀</span>
+                            <span>{t('library.startReading')}</span>
                           </button>
                         )}
                       </div>
@@ -472,15 +474,15 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
 
                   {/* 卷冊列表 */}
                   <div className="flex flex-col space-y-4">
-                    <h3 className="text-sm font-semibold text-zinc-300">所有卷冊 / 章節</h3>
+                    <h3 className="text-sm font-semibold text-zinc-300">{t('library.allVolumesAndChapters')}</h3>
                     {isLoading ? (
                       <div className="flex flex-col items-center justify-center py-12 space-y-2">
                         <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="text-xs text-zinc-500">正在獲取卷冊與章節...</span>
+                        <span className="text-xs text-zinc-500">{t('library.fetchingVolumes')}</span>
                       </div>
                     ) : volumes.length === 0 ? (
                       <div className="text-center py-10 text-zinc-500 text-sm bg-zinc-900/30 rounded-xl border border-zinc-800/40">
-                        此作品尚無可用卷冊或章節（請確認後端 Kavita 是否已完成掃描分析）
+                        {t('library.noVolumesAvailable')}
                       </div>
                     ) : (
                       volumes.map((vol) => {
@@ -499,9 +501,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
                             return vol.name;
                           }
                           if (vol.minNumber !== undefined && vol.minNumber > 0 && vol.minNumber < 100000) {
-                            return `第 ${vol.minNumber} 卷`;
+                            return t('common.volumeIndicator', { volume: vol.minNumber });
                           }
-                          return '單篇 / 散話';
+                          return t('common.specialVolume');
                         })();
 
                         return (
@@ -545,7 +547,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
                                       <div>
                                         <h4 className="text-sm font-medium text-white">{title}</h4>
                                         <p className="text-xs text-zinc-500 font-mono">
-                                          {ch.pages ? `${ch.pages} 頁` : 'EPUB 格式'}
+                                          {ch.pages ? t('common.pagesCount', { count: ch.pages }) : t('common.epubFormat')}
                                         </p>
                                       </div>
                                     </div>
@@ -562,8 +564,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
                                       }`}
                                       title={
                                         isDownloaded
-                                          ? '已在 Android 原生沙盒'
-                                          : '下載到 Android 沙盒'
+                                          ? t('library.inSandboxTooltip')
+                                          : t('library.downloadToSandboxTooltip')
                                       }
                                     >
                                       {isDownloaded ? (
@@ -594,10 +596,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
           <div className="max-w-5xl mx-auto flex flex-col space-y-4">
             {isLoading ? (
               <div className="text-center py-16 text-zinc-500 text-sm animate-pulse">
-                載入書庫內容中...
+                {t('library.loadingContent')}
               </div>
             ) : filteredSeries.length === 0 ? (
-              <div className="text-center py-16 text-zinc-500 text-sm">無相符的作品</div>
+              <div className="text-center py-16 text-zinc-500 text-sm">{t('library.noMatchingSeries')}</div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
                 {filteredSeries.map((s) => (

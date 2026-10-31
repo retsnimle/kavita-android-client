@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { UseReaderPreferencesReturn } from '../hooks/useReaderPreferences';
 import { getWeightName } from '../types';
+import { useI18n } from '../../../core/i18n';
 
 interface ReaderSettingsModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = ({
   triggerBtnRef,
   getIframeDoc,
 }) => {
+  const { t } = useI18n();
   const modalRef = useRef<HTMLDivElement>(null);
 
   // 點選 Popup 焦點外自動關閉
@@ -85,7 +87,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = ({
       >
         {/* 字級調整 */}
         <div className="flex items-center justify-between">
-          <span>字號 ({fontSize}px)</span>
+          <span>{t('epub.fontSize', { size: fontSize })}</span>
           <div className="flex space-x-2">
             <button
               onClick={() => setFontSize((s) => Math.max(12, s - 2))}
@@ -104,64 +106,64 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = ({
 
         {/* 行高調整 */}
         <div className="flex items-center justify-between">
-          <span>行距 ({lineHeight})</span>
+          <span>{t('epub.lineHeight', { height: lineHeight })}</span>
           <div className="flex space-x-2">
             <button
               onClick={() => setLineHeight((h) => Math.max(1.2, parseFloat((h - 0.2).toFixed(1))))}
               className="px-2.5 py-1 bg-zinc-800 rounded hover:bg-zinc-700"
             >
-              緊湊
+              {t('epub.lineHeightCompact')}
             </button>
             <button
               onClick={() => setLineHeight((h) => Math.min(2.4, parseFloat((h + 0.2).toFixed(1))))}
               className="px-2.5 py-1 bg-zinc-800 rounded hover:bg-zinc-700"
             >
-              寬鬆
+              {t('epub.lineHeightLoose')}
             </button>
           </div>
         </div>
 
         {/* 留白邊距調整 */}
         <div className="flex items-center justify-between">
-          <span>留白邊距 ({paddingX}px)</span>
+          <span>{t('epub.padding', { padding: paddingX })}</span>
           <div className="flex space-x-2">
             <button
               onClick={() => setPaddingX((p) => Math.max(8, p - 4))}
               className="px-2.5 py-1 bg-zinc-800 rounded hover:bg-zinc-700"
             >
-              收窄
+              {t('epub.paddingNarrow')}
             </button>
             <button
               onClick={() => setPaddingX((p) => Math.min(64, p + 4))}
               className="px-2.5 py-1 bg-zinc-800 rounded hover:bg-zinc-700"
             >
-              擴寬
+              {t('epub.paddingWide')}
             </button>
           </div>
         </div>
 
         {/* 直排 / 橫排切換 */}
         <div className="flex items-center justify-between">
-          <span>閱讀方向</span>
+          <span>{t('epub.direction')}</span>
           <div className="flex bg-zinc-800 rounded p-1">
             <button
               onClick={() => setIsVertical(false)}
               className={`px-3 py-1 rounded ${!isVertical ? 'bg-zinc-700 font-bold' : ''}`}
             >
-              橫排
+              {t('epub.horizontal')}
             </button>
             <button
               onClick={() => setIsVertical(true)}
               className={`px-3 py-1 rounded ${isVertical ? 'bg-zinc-700 font-bold' : ''}`}
             >
-              直排
+              {t('epub.vertical')}
             </button>
           </div>
         </div>
 
         {/* 版面模式（滾動 / 單欄） */}
         <div className="flex items-center justify-between">
-          <span>版面模式</span>
+          <span>{t('epub.layout')}</span>
           <div className="flex bg-zinc-800 rounded p-1">
             <button
               onClick={() => setLayoutMode('scroll')}
@@ -169,7 +171,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = ({
                 layoutMode === 'scroll' ? 'bg-zinc-700 font-bold text-white' : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              滾動
+              {t('epub.scroll')}
             </button>
             <button
               onClick={() => setLayoutMode('paged')}
@@ -177,7 +179,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = ({
                 layoutMode === 'paged' ? 'bg-zinc-700 font-bold text-white' : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              單欄
+              {t('epub.paged')}
             </button>
           </div>
         </div>
@@ -185,7 +187,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = ({
         {/* 字型樣式（下拉選單） */}
         <div className="flex flex-col space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-zinc-300">字型</span>
+            <span className="text-zinc-300">{t('epub.font')}</span>
             <div className="flex items-center space-x-2">
               {fontDownloadProgress?.isDownloading && (
                 <span className="text-[10px] text-emerald-400 animate-pulse font-mono font-bold">
@@ -201,15 +203,15 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = ({
                 disabled={fontDownloadProgress?.isDownloading}
                 className="bg-zinc-800 border border-zinc-700 text-xs text-zinc-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 max-w-[160px] truncate cursor-pointer"
               >
-                <option value="sans-serif">預設黑體</option>
-                <option value="serif">思源宋體</option>
+                <option value="sans-serif">{t('epub.fontSans')}</option>
+                <option value="serif">{t('epub.fontSerif')}</option>
                 {fontFamilies.length > 0 && (
-                  <optgroup label="伺服器字型">
+                  <optgroup label={t('epub.serverFonts')}>
                     {fontFamilies.map((group) => {
                       const isCached = downloadedFamilies.has(group.family);
                       return (
                         <option key={group.family} value={group.family}>
-                          {group.name || group.family} {!isCached ? '(☁️ 需下載)' : ''}
+                          {group.name || group.family} {!isCached ? t('epub.needsDownload') : ''}
                         </option>
                       );
                     })}
@@ -233,8 +235,8 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = ({
                   }`}
                 >
                   {fontDownloadProgress.error
-                    ? `下載失敗: ${fontDownloadProgress.error}`
-                    : `正在下載 ${fontDownloadProgress.fontName}`}
+                    ? t('epub.downloadFailed', { error: fontDownloadProgress.error })
+                    : t('epub.downloadingFont', { name: fontDownloadProgress.fontName })}
                 </span>
                 {!fontDownloadProgress.error && (
                   <span className="font-mono text-emerald-400 font-bold">
@@ -264,30 +266,30 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = ({
 
         {/* 字重調節（智慧依字型可用字重增減） */}
         <div className="flex items-center justify-between">
-          <span>字重 ({getWeightName(activeWeightNum)})</span>
+          <span>{t('epub.fontWeight', { weight: getWeightName(activeWeightNum, t) })}</span>
           <div className="flex space-x-2">
             <button
               onClick={handleDecreaseWeight}
               disabled={!canDecreaseWeight}
               className="px-2.5 py-1 bg-zinc-800 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:hover:bg-zinc-800 text-zinc-300 transition-colors cursor-pointer disabled:cursor-not-allowed"
-              title="減少字重"
+              title={t('epub.weightDecrease')}
             >
-              減少
+              {t('epub.weightDecrease')}
             </button>
             <button
               onClick={handleIncreaseWeight}
               disabled={!canIncreaseWeight}
               className="px-2.5 py-1 bg-zinc-800 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:hover:bg-zinc-800 text-zinc-300 transition-colors cursor-pointer disabled:cursor-not-allowed"
-              title="增加字重"
+              title={t('epub.weightIncrease')}
             >
-              增加
+              {t('epub.weightIncrease')}
             </button>
           </div>
         </div>
 
         {/* 配色主題 */}
         <div className="flex items-center justify-between">
-          <span>主題</span>
+          <span>{t('epub.theme')}</span>
           <div className="flex space-x-2">
             <button
               onClick={() => setTheme('light')}

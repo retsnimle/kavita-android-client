@@ -11,13 +11,13 @@ Repo: https://github.com/retsnimle/kavita-android-client.git
 
 AutoUpdateMode: Version %v
 UpdateCheckMode: Tags
-CurrentVersion: 1.0.49
-CurrentVersionCode: 50
+CurrentVersion: 1.0.50
+CurrentVersionCode: 51
 
 Builds:
-  - versionName: 1.0.49
-    versionCode: 50
-    commit: 298cf89b45fb710f9b1eafce4642aad91cf08fcf
+  - versionName: 1.0.50
+    versionCode: 51
+    commit: v1.0.50
     subdir: android
     sudo:
       - apt-get update

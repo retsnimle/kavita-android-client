@@ -116,8 +116,8 @@ defaultConfig {
     applicationId "io.github.retsnimle.kavitareader"
     minSdkVersion rootProject.ext.minSdkVersion
     targetSdkVersion rootProject.ext.targetSdkVersion
-    versionCode 50          // 整數遞增，確保 Android 系統允許覆蓋安裝
-    versionName "1.0.49"    // 語意化版本號（主要.次要.修訂）
+    versionCode 51          // 整數遞增，確保 Android 系統允許覆蓋安裝
+    versionName "1.0.50"    // 語意化版本號（主要.次要.修訂）
     testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     ...
 }

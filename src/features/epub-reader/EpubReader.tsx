@@ -12,6 +12,7 @@ import { usePagination } from './hooks/usePagination';
 import { ReaderHeader } from './components/ReaderHeader';
 import { ReaderFooter } from './components/ReaderFooter';
 import { ReaderSettingsModal } from './components/ReaderSettingsModal';
+import { useI18n } from '../../core/i18n';
 
 export const EpubReader: React.FC<EpubReaderProps> = ({
   seriesId,
@@ -22,6 +23,7 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
   initialPage = 0,
   onClose,
 }) => {
+  const { t } = useI18n();
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showControls, setShowControls] = useState<boolean>(true);
   const settingsBtnRef = useRef<HTMLButtonElement>(null);
@@ -772,13 +774,13 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
         {!isReaderReady && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black text-zinc-400 text-sm">
             <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
-            <span>載入 EPUB 章節中...</span>
+            <span>{t('epub.loadingChapters')}</span>
           </div>
         )}
         {isSectionLoading && isReaderReady && (
           <div className="absolute top-4 right-4 z-30 bg-zinc-900/80 px-3 py-1 rounded-full text-xs text-emerald-400 flex items-center space-x-1.5 backdrop-blur-sm shadow">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>渲染章節中...</span>
+            <span>{t('epub.renderingChapter')}</span>
           </div>
         )}
         <iframe

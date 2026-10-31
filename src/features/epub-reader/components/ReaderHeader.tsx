@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowLeft, Type, Download, CheckCircle } from 'lucide-react';
+import { useI18n } from '../../../core/i18n';
 
 interface ReaderHeaderProps {
   showControls: boolean;
@@ -26,6 +27,8 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = ({
   onDownload,
   settingsBtnRef,
 }) => {
+  const { t } = useI18n();
+
   return (
     <div
       className={`absolute top-0 left-0 right-0 z-40 bg-zinc-900/90 backdrop-blur-md px-4 py-3 border-b border-zinc-800 flex items-center justify-between transition-transform duration-300 ${
@@ -52,6 +55,7 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = ({
           ref={settingsBtnRef}
           onClick={onToggleSettings}
           className="p-2 rounded-full hover:bg-zinc-800 text-zinc-300 hover:text-white"
+          title={t('epub.readerSettings')}
         >
           <Type className="w-5 h-5" />
         </button>
@@ -67,6 +71,7 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = ({
               ? 'text-yellow-400'
               : 'text-zinc-300 hover:bg-zinc-800'
           }`}
+          title={isOffline ? t('common.inSandbox') : t('epub.downloadChapter')}
         >
           {isOffline ? (
             <CheckCircle className="w-5 h-5" />

@@ -1,0 +1,4 @@
+- Complete internationalization (i18n) supporting English (en-US) and Traditional Chinese (zh-TW).
+- Auto-detects device system language with manual language toggle in Settings.
+- Persistent language preference powered by Android native Preferences.
+- Comprehensive localization across Login, Library, Offline Shelf, Comic and EPUB readers.

@@ -11,6 +11,7 @@ import { nativeStorage } from '../../core/storage/nativeStorage';
 import { progressReconciler } from '../../core/sync/reconciler';
 import { downloadManager } from '../../core/storage/downloadManager';
 import { backButtonManager } from '../../core/navigation/backButtonManager';
+import { useI18n } from '../../core/i18n';
 
 
 interface ComicReaderProps {
@@ -34,6 +35,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
   initialPage = 0,
   onClose,
 }) => {
+  const { t } = useI18n();
   const [totalPages, setTotalPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
   const [mode, setMode] = useState<ReaderMode>('rtl'); // 預設日漫右至左
@@ -256,9 +258,17 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') {
-        mode === 'rtl' ? handlePageChange(currentPage + 1) : handlePageChange(currentPage - 1);
+        if (mode === 'rtl') {
+          handlePageChange(currentPage + 1);
+        } else {
+          handlePageChange(currentPage - 1);
+        }
       } else if (e.key === 'ArrowRight') {
-        mode === 'rtl' ? handlePageChange(currentPage - 1) : handlePageChange(currentPage + 1);
+        if (mode === 'rtl') {
+          handlePageChange(currentPage - 1);
+        } else {
+          handlePageChange(currentPage + 1);
+        }
       } else if (e.key === ' ') {
         setShowControls((p) => !p);
       }
@@ -330,7 +340,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                 mode === 'rtl' ? 'bg-zinc-700 text-white font-medium' : 'text-zinc-400'
               }`}
             >
-              日漫
+              {t('comic.modeRtl')}
             </button>
             <button
               onClick={() => setMode('ltr')}
@@ -338,7 +348,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                 mode === 'ltr' ? 'bg-zinc-700 text-white font-medium' : 'text-zinc-400'
               }`}
             >
-              美漫
+              {t('comic.modeLtr')}
             </button>
             <button
               onClick={() => setMode('webtoon')}
@@ -346,7 +356,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                 mode === 'webtoon' ? 'bg-zinc-700 text-white font-medium' : 'text-zinc-400'
               }`}
             >
-              條漫
+              {t('comic.modeWebtoon')}
             </button>
           </div>
 
@@ -361,7 +371,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                 ? 'text-yellow-400'
                 : 'text-zinc-300 hover:bg-zinc-800'
             }`}
-            title={isOffline ? '已在本地沙盒' : '下載整話至 Android 沙盒'}
+            title={isOffline ? t('comic.inSandboxTooltip') : t('comic.downloadChapterTooltip')}
           >
             {isOffline ? (
               <CheckCircle className="w-5 h-5" />
@@ -381,7 +391,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
         className="flex-1 w-full h-full relative overflow-y-auto overflow-x-hidden flex items-center justify-center"
       >
         {isLoading ? (
-          <div className="text-zinc-400 text-sm animate-pulse">載入中...</div>
+          <div className="text-zinc-400 text-sm animate-pulse">{t('comic.loading')}</div>
         ) : mode === 'webtoon' ? (
           /* Webtoon 瀑布流連續滾動模式 */
           <div className="w-full max-w-3xl flex flex-col items-center">
@@ -410,7 +420,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                 className="max-w-full max-h-full object-contain select-none shadow-2xl transition-opacity duration-150"
               />
             ) : (
-              <div className="text-zinc-500 text-sm">載入第 {currentPage + 1} 頁...</div>
+              <div className="text-zinc-500 text-sm">{t('comic.loadingPage', { page: currentPage + 1 })}</div>
             )}
           </div>
         )}
@@ -426,10 +436,10 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
         <div className="max-w-xl mx-auto flex flex-col space-y-2">
           <div className="flex items-center justify-between text-xs text-zinc-400 font-mono">
             <span>
-              P. {currentPage + 1} / {totalPages}
+              {t('comic.pageIndicator', { current: currentPage + 1, total: totalPages })}
             </span>
             <span className="text-emerald-400 font-sans">
-              {isOffline ? '已在 Android 原生沙盒' : '線上串流'}
+              {isOffline ? t('common.inSandbox') : t('common.onlineStream')}
             </span>
           </div>
 
@@ -441,7 +451,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage >= totalPages - 1}
                   className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-30 transition-colors"
-                  title="下一頁 (往左翻)"
+                  title={t('comic.nextPageRtl')}
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
@@ -458,7 +468,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage <= 0}
                   className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-30 transition-colors"
-                  title="上一頁 (往右翻)"
+                  title={t('comic.prevPageRtl')}
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
@@ -470,7 +480,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage <= 0}
                   className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-30 transition-colors"
-                  title="上一頁"
+                  title={t('comic.prevPageLtr')}
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
@@ -487,7 +497,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage >= totalPages - 1}
                   className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-30 transition-colors"
-                  title="下一頁"
+                  title={t('comic.nextPageLtr')}
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>

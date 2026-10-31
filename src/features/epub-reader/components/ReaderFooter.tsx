@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useI18n } from '../../../core/i18n';
 import type { LayoutMode } from '../types';
 
 interface ReaderFooterProps {
@@ -25,6 +26,8 @@ export const ReaderFooter: React.FC<ReaderFooterProps> = ({
   isVertical,
   onSectionChange,
 }) => {
+  const { t } = useI18n();
+
   return (
     <div
       className={`absolute bottom-0 left-0 right-0 z-40 bg-zinc-900/90 backdrop-blur-md px-6 py-4 border-t border-zinc-800 transition-transform duration-300 ${
@@ -35,11 +38,11 @@ export const ReaderFooter: React.FC<ReaderFooterProps> = ({
       <div className="max-w-xl mx-auto flex flex-col space-y-2">
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span>
-            章節 {currentSectionIndex + 1} / {totalSections}
-            {layoutMode === 'paged' && ` · 頁 ${virtualPageIndex + 1} / ${totalVirtualPages}`}
+            {t('epub.chapterIndicator', { current: currentSectionIndex + 1, total: totalSections })}
+            {layoutMode === 'paged' && t('epub.pageIndicator', { current: virtualPageIndex + 1, total: totalVirtualPages })}
           </span>
           <span className="text-emerald-400">
-            {isOffline ? '已在 Android 原生沙盒' : '線上讀取'}
+            {isOffline ? t('common.inSandbox') : t('common.onlineReading')}
           </span>
         </div>
 
@@ -48,7 +51,7 @@ export const ReaderFooter: React.FC<ReaderFooterProps> = ({
             onClick={() => onSectionChange(isVertical ? currentSectionIndex + 1 : currentSectionIndex - 1)}
             disabled={isVertical ? currentSectionIndex >= totalSections - 1 : currentSectionIndex <= 0}
             className="p-1 rounded text-zinc-400 hover:text-white disabled:opacity-30"
-            title={isVertical ? '下一章節' : '上一章節'}
+            title={isVertical ? t('epub.nextChapter') : t('epub.prevChapter')}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -65,7 +68,7 @@ export const ReaderFooter: React.FC<ReaderFooterProps> = ({
             onClick={() => onSectionChange(isVertical ? currentSectionIndex - 1 : currentSectionIndex + 1)}
             disabled={isVertical ? currentSectionIndex <= 0 : currentSectionIndex >= totalSections - 1}
             className="p-1 rounded text-zinc-400 hover:text-white disabled:opacity-30"
-            title={isVertical ? '上一章節' : '下一章節'}
+            title={isVertical ? t('epub.prevChapter') : t('epub.nextChapter')}
           >
             <ChevronRight className="w-5 h-5" />
           </button>

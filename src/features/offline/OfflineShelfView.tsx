@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { db } from '../../core/database/db';
 import { nativeStorage } from '../../core/storage/nativeStorage';
+import { useI18n } from '../../core/i18n';
 import type { OfflineBookMeta } from '../../types/kavita';
 
 interface OfflineShelfViewProps {
@@ -22,6 +23,7 @@ interface OfflineShelfViewProps {
 }
 
 export const OfflineShelfView: React.FC<OfflineShelfViewProps> = ({ onOpenReader }) => {
+  const { t } = useI18n();
   const [offlineBooks, setOfflineBooks] = useState<OfflineBookMeta[]>([]);
   const [storageInfo, setStorageInfo] = useState<{ totalBytes: number; bookCount: number }>({
     totalBytes: 0,
@@ -46,7 +48,7 @@ export const OfflineShelfView: React.FC<OfflineShelfViewProps> = ({ onOpenReader
   }, []);
 
   const handleDelete = async (chapterId: number, format: 'comic' | 'epub') => {
-    if (!window.confirm('確定要從 Android 沙盒中刪除此離線內容並釋放空間嗎？')) return;
+    if (!window.confirm(t('offline.deleteConfirm'))) return;
     await nativeStorage.deleteOfflineChapter(chapterId, format);
     await loadOfflineData();
   };
@@ -68,7 +70,7 @@ export const OfflineShelfView: React.FC<OfflineShelfViewProps> = ({ onOpenReader
       >
         <div className="flex items-center space-x-2">
           <FolderDown className="w-5 h-5 text-emerald-400" />
-          <h1 className="text-base font-bold">Android 原生離線書架</h1>
+          <h1 className="text-base font-bold">{t('offline.title')}</h1>
         </div>
       </div>
 
@@ -81,16 +83,16 @@ export const OfflineShelfView: React.FC<OfflineShelfViewProps> = ({ onOpenReader
               <HardDrive className="w-6 h-6" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs text-zinc-400">已使用沙盒儲存</div>
+              <div className="text-xs text-zinc-400">{t('offline.storageUsed')}</div>
               <div className="text-xl font-bold font-mono text-white">
                 {formatSize(storageInfo.totalBytes)}
               </div>
             </div>
           </div>
           <div className="shrink-0 text-right whitespace-nowrap">
-            <div className="text-xs text-zinc-500">已下載章節</div>
+            <div className="text-xs text-zinc-500">{t('offline.downloadedChapters')}</div>
             <div className="text-lg font-bold font-mono text-zinc-200">
-              {storageInfo.bookCount} 本/話
+              {t('offline.chaptersCount', { count: storageInfo.bookCount })}
             </div>
           </div>
         </div>
@@ -98,19 +100,19 @@ export const OfflineShelfView: React.FC<OfflineShelfViewProps> = ({ onOpenReader
         {/* 離線書籍列表 */}
         <div className="flex flex-col space-y-3">
           <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-            本機已下載內容
+            {t('offline.localDownloaded')}
           </h2>
 
           {isLoading ? (
             <div className="text-center py-12 text-zinc-500 text-sm animate-pulse">
-              讀取本機沙盒中...
+              {t('offline.readingSandbox')}
             </div>
           ) : offlineBooks.length === 0 ? (
             <div className="text-center py-16 bg-zinc-900/30 border border-zinc-800/40 rounded-2xl p-6 flex flex-col items-center">
               <BookOpen className="w-10 h-10 text-zinc-600 mb-2" />
-              <p className="text-sm text-zinc-400">目前尚無離線下載的書籍</p>
+              <p className="text-sm text-zinc-400">{t('offline.emptyTitle')}</p>
               <p className="text-xs text-zinc-500 mt-1">
-                進入書庫後點擊下載按鈕，即可將書籍保存至此處供斷網離線閱讀。
+                {t('offline.emptyDesc')}
               </p>
             </div>
           ) : (
@@ -154,7 +156,7 @@ export const OfflineShelfView: React.FC<OfflineShelfViewProps> = ({ onOpenReader
                 <button
                   onClick={() => handleDelete(book.chapterId, book.format)}
                   className="p-2 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors ml-2"
-                  title="刪除檔案釋放空間"
+                  title={t('offline.deleteTooltip')}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
