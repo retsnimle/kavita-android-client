@@ -125,12 +125,12 @@ class KavitaClient {
         if (res.status >= 400) {
           const errDetail =
             typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-          throw new Error(`伺服器回應錯誤 (${res.status}): ${errDetail}`);
+          throw new Error(`Server error (${res.status}): ${errDetail}`);
         }
         return res.data as T;
       } catch (e: any) {
-        console.error('[CapacitorHttp] 請求失敗:', e);
-        throw new Error(e.message || '原生連線失敗，請確認伺服器網址是否正確');
+        console.error('[CapacitorHttp] Request failed:', e);
+        throw new Error(e.message || 'Connection failed, please check server URL');
       }
     } else {
       const controller = new AbortController();
@@ -145,13 +145,13 @@ class KavitaClient {
         clearTimeout(timer);
         if (!res.ok) {
           const errText = await res.text();
-          throw new Error(`請求失敗 (${res.status}): ${errText || res.statusText}`);
+          throw new Error(`Request failed (${res.status}): ${errText || res.statusText}`);
         }
         return await res.json();
       } catch (e: any) {
         clearTimeout(timer);
         if (e.name === 'AbortError') {
-          throw new Error(`網路請求超時 (${readTimeout}ms)`);
+          throw new Error(`Network timeout (${readTimeout}ms)`);
         }
         throw e;
       }

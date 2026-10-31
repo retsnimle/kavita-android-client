@@ -1,3 +1,5 @@
+import type { TranslationKey } from '../../core/i18n';
+
 export interface EpubReaderProps {
   seriesId: number;
   seriesName: string;
@@ -39,7 +41,7 @@ export const normalizeWeight = (w?: string | number): number => {
   return isNaN(parsed) ? 400 : parsed;
 };
 
-export const getWeightName = (w: number, t?: (k: any) => string): string => {
+export const getWeightName = (w: number, t?: (k: TranslationKey) => string): string => {
   if (t) {
     if (w <= 100) return t('epub.weightThin');
     if (w <= 200) return t('epub.weightExtraLight');

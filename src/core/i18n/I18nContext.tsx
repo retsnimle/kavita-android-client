@@ -28,23 +28,26 @@ const getInitialLocale = (): Locale => {
 export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [locale, setLocaleState] = useState<Locale>(getInitialLocale);
 
-  // 非同步自 Android 原生偏好讀取設定（避免 WebView 快取清理後遺失）
+  // 非同步自 Android 原生偏好讀取設定（水合快取，避免 WebView 快取清理後遺失）
   useEffect(() => {
     Preferences.get({ key: STORAGE_KEY })
       .then(({ value }) => {
         if (value === 'zh-TW' || value === 'en-US') {
-          if (value !== locale) {
-            setLocaleState(value);
-            try {
-              localStorage.setItem(STORAGE_KEY, value);
-            } catch {
-              // Ignore
+          setLocaleState((current) => {
+            if (current !== value) {
+              try {
+                localStorage.setItem(STORAGE_KEY, value);
+              } catch {
+                // Ignore
+              }
+              return value;
             }
-          }
+            return current;
+          });
         }
       })
       .catch(() => {});
-  }, [locale]);
+  }, []);
 
   const setLocale = useCallback(async (newLocale: Locale) => {
     setLocaleState(newLocale);
@@ -66,7 +69,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let text: string = dict[key] || DICTIONARIES['zh-TW'][key] || key;
       if (params) {
         for (const [k, v] of Object.entries(params)) {
-          text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+          text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), () => String(v));
         }
       }
       return text;
