@@ -17,7 +17,7 @@ CurrentVersionCode: 51
 Builds:
   - versionName: 1.0.50
     versionCode: 51
-    commit: 7d88d7c2bc6419c12fe19020322784cbe84ce693
+    commit: dd55b0e94867a56599a6c148af85efe35123c92e
     subdir: android
     sudo:
       - apt-get update
