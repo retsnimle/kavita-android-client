@@ -31,3 +31,9 @@ Builds:
     gradle:
       - yes
     output: app/build/outputs/apk/release/app-release-unsigned.apk
+    scanignore:
+      - node_modules/@capacitor/cli/assets/ios-pods-template.tar.gz
+      - node_modules/@capacitor/cli/assets/capacitor-cordova-ios-plugins.tar.gz
+      - node_modules/@capacitor/cli/assets/ios-spm-template.tar.gz
+      - node_modules/@capacitor/cli/assets/capacitor-cordova-android-plugins.tar.gz
+      - node_modules/@capacitor/cli/assets/android-template.tar.gz
