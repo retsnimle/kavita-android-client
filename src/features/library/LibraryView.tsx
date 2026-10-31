@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Download,
   CheckCircle,
@@ -58,6 +58,19 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
   const [offlineMap, setOfflineMap] = useState<Record<number, boolean>>({});
   const [downloadProgressMap, setDownloadProgressMap] = useState<Record<number, DownloadProgress>>({});
   const [recentlyRead, setRecentlyRead] = useState<RecentEntry[]>([]);
+  const [isEditingRecent, setIsEditingRecent] = useState(false);
+  const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set());
+
+  // 長按與手勢判定 Refs
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isLongPressTriggeredRef = useRef(false);
+  const isMovedRef = useRef(false);
+  const isTouchInteractionRef = useRef(false);
+  const resetTriggerTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resetTouchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resetMovedTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const deleteTimersRef = useRef<NodeJS.Timeout[]>([]);
 
   // 0. 載入最近閱讀記錄（從 cached_progress，按更新時間排序，並支援跨頁面/閱讀完後即時刷新）
   const loadRecent = useCallback(async () => {
@@ -65,6 +78,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
       const allProgress = await db.cached_progress.toArray();
       if (!allProgress || allProgress.length === 0) {
         setRecentlyRead([]);
+        setIsEditingRecent(false);
         return;
       }
 
@@ -98,6 +112,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
         });
       }
       setRecentlyRead(entries);
+      if (entries.length === 0) {
+        setIsEditingRecent(false);
+      }
     } catch (err) {
       console.warn('載入最近閱讀失敗:', err);
     }
@@ -158,6 +175,85 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
     return unregister;
   }, [selectedSeries]);
 
+  // 監聽 Android 返回鍵：若處於最近閱讀編輯模式，按返回鍵退出編輯模式
+  useEffect(() => {
+    if (!isEditingRecent) return;
+    const unregister = backButtonManager.register(() => {
+      setIsEditingRecent(false);
+      return true;
+    });
+    return unregister;
+  }, [isEditingRecent]);
+
+  // 點擊卡片外部空白處立即退出編輯模式（不干擾在最近閱讀橫向列表內的滑動操作）
+  useEffect(() => {
+    if (!isEditingRecent) return;
+
+    let startX = 0;
+    let startY = 0;
+    let isScrollGesture = false;
+    let hasPointerDownInSession = false;
+
+    const onPointerDown = (e: PointerEvent) => {
+      startX = e.clientX;
+      startY = e.clientY;
+      isScrollGesture = false;
+      hasPointerDownInSession = true;
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!hasPointerDownInSession) return;
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 10) {
+        isScrollGesture = true;
+      }
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      // 忽略進入編輯模式手勢的尾隨放手、滾動滑動手勢或剛觸發長按的狀況
+      if (!hasPointerDownInSession || isLongPressTriggeredRef.current || isScrollGesture) {
+        return;
+      }
+
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      // 若點擊在卡片內部或完成按鈕上，不在此處退出
+      if (
+        target.closest('[data-recent-card="true"]') ||
+        target.closest('[data-recent-done="true"]')
+      ) {
+        return;
+      }
+
+      // 點擊了卡片外部的空白處，退出編輯模式
+      setIsEditingRecent(false);
+    };
+
+    const timer = setTimeout(() => {
+      document.addEventListener('pointerdown', onPointerDown, { passive: true });
+      document.addEventListener('pointermove', onPointerMove, { passive: true });
+      document.addEventListener('pointerup', onPointerUp);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [isEditingRecent]);
+
+  // 元件卸載時清理所有相關計時器
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      if (resetTriggerTimerRef.current) clearTimeout(resetTriggerTimerRef.current);
+      if (resetTouchTimerRef.current) clearTimeout(resetTouchTimerRef.current);
+      if (resetMovedTimerRef.current) clearTimeout(resetMovedTimerRef.current);
+      deleteTimersRef.current.forEach(clearTimeout);
+    };
+  }, []);
+
 
 
   // 2. 監聽下載管理器
@@ -199,6 +295,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
 
   // 4. 點選某個系列載入詳情
   const handleSelectSeries = async (series: SeriesDto) => {
+    setIsEditingRecent(false);
     setSelectedSeries(series);
     setVolumes([]);
     try {
@@ -275,6 +372,204 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
     }
   };
 
+  // 長按手勢判定：觸控
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (isEditingRecent || e.touches.length !== 1) return;
+    isTouchInteractionRef.current = true;
+    const touch = e.touches[0];
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+    isLongPressTriggeredRef.current = false;
+    isMovedRef.current = false;
+
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressTriggeredRef.current = true;
+      setIsEditingRecent(true);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try {
+          navigator.vibrate(40);
+        } catch {
+          // ignore
+        }
+      }
+    }, 500);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartPosRef.current) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartPosRef.current.x;
+    const dy = touch.clientY - touchStartPosRef.current.y;
+    // 超過 10px 位移立即取消長按計時，並標記為滾動手勢防止誤觸點擊
+    if (Math.hypot(dx, dy) > 10) {
+      isMovedRef.current = true;
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (isLongPressTriggeredRef.current) {
+      if (resetTriggerTimerRef.current) clearTimeout(resetTriggerTimerRef.current);
+      resetTriggerTimerRef.current = setTimeout(() => {
+        isLongPressTriggeredRef.current = false;
+        resetTriggerTimerRef.current = null;
+      }, 200);
+    }
+    if (isMovedRef.current) {
+      if (resetMovedTimerRef.current) clearTimeout(resetMovedTimerRef.current);
+      resetMovedTimerRef.current = setTimeout(() => {
+        isMovedRef.current = false;
+        resetMovedTimerRef.current = null;
+      }, 200);
+    }
+    if (resetTouchTimerRef.current) clearTimeout(resetTouchTimerRef.current);
+    resetTouchTimerRef.current = setTimeout(() => {
+      isTouchInteractionRef.current = false;
+      resetTouchTimerRef.current = null;
+    }, 500);
+  };
+
+  const handleTouchCancel = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (resetTriggerTimerRef.current) {
+      clearTimeout(resetTriggerTimerRef.current);
+      resetTriggerTimerRef.current = null;
+    }
+    if (resetTouchTimerRef.current) {
+      clearTimeout(resetTouchTimerRef.current);
+      resetTouchTimerRef.current = null;
+    }
+    if (resetMovedTimerRef.current) {
+      clearTimeout(resetMovedTimerRef.current);
+      resetMovedTimerRef.current = null;
+    }
+    isLongPressTriggeredRef.current = false;
+    isMovedRef.current = false;
+    isTouchInteractionRef.current = false;
+  };
+
+  // 長按手勢判定：滑鼠
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (isEditingRecent || isTouchInteractionRef.current || e.button !== 0) return;
+    touchStartPosRef.current = { x: e.clientX, y: e.clientY };
+    isLongPressTriggeredRef.current = false;
+    isMovedRef.current = false;
+
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressTriggeredRef.current = true;
+      setIsEditingRecent(true);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try {
+          navigator.vibrate(40);
+        } catch {
+          // ignore
+        }
+      }
+    }, 500);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!touchStartPosRef.current) return;
+    const dx = e.clientX - touchStartPosRef.current.x;
+    const dy = e.clientY - touchStartPosRef.current.y;
+    if (Math.hypot(dx, dy) > 10) {
+      isMovedRef.current = true;
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (isLongPressTriggeredRef.current) {
+      if (resetTriggerTimerRef.current) clearTimeout(resetTriggerTimerRef.current);
+      resetTriggerTimerRef.current = setTimeout(() => {
+        isLongPressTriggeredRef.current = false;
+        resetTriggerTimerRef.current = null;
+      }, 200);
+    }
+    if (isMovedRef.current) {
+      if (resetMovedTimerRef.current) clearTimeout(resetMovedTimerRef.current);
+      resetMovedTimerRef.current = setTimeout(() => {
+        isMovedRef.current = false;
+        resetMovedTimerRef.current = null;
+      }, 200);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleCardClick = (entry: RecentEntry) => {
+    // 處於編輯模式、剛完成長按手勢或正處於滑動滾動時，禁止觸發開啟閱讀器
+    if (isLongPressTriggeredRef.current || isEditingRecent || isMovedRef.current) {
+      return;
+    }
+    onOpenReader({
+      seriesId: entry.seriesId,
+      seriesName: entry.seriesName,
+      volumeId: entry.volumeId,
+      chapterId: entry.chapterId,
+      chapterTitle: entry.chapterTitle,
+      format: entry.format,
+    });
+  };
+
+  // 刪除最近閱讀項目，精確清除 Dexie 快取並帶平滑過渡
+  const handleDeleteRecent = async (entry: RecentEntry) => {
+    // 立即加入刪除中集合，觸發縮小淡出動畫
+    setDeletingIds((prev) => new Set(prev).add(entry.seriesId));
+
+    try {
+      await db.cached_progress.where('seriesId').equals(entry.seriesId).delete();
+      await db.progress_queue.where('seriesId').equals(entry.seriesId).delete();
+    } catch (err) {
+      console.error('刪除最近閱讀資料庫記錄失敗:', err);
+    }
+
+    const timer = setTimeout(() => {
+      setRecentlyRead((prev) => {
+        const next = prev.filter((item) => item.seriesId !== entry.seriesId);
+        if (next.length === 0) {
+          setIsEditingRecent(false);
+        }
+        return next;
+      });
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.seriesId);
+        return next;
+      });
+    }, 200);
+    deleteTimersRef.current.push(timer);
+  };
+
   // 過濾搜尋
   const filteredSeries = seriesList.filter((s) =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -336,7 +631,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (isEditingRecent) setIsEditingRecent(false);
+              }}
               placeholder={t('library.searchPlaceholder')}
               className="w-full pl-9 pr-9 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
             />
@@ -353,39 +651,98 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenReader }) => {
 
           {/* 最近閱讀（固定橫向滑動列） */}
           {recentlyRead.length > 0 && !searchQuery && (
-            <div className="flex flex-col space-y-1.5 pb-0.5">
-              <div className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-400">
-                <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{t('library.recentlyRead')}</span>
-              </div>
-              <div className="flex space-x-3 overflow-x-auto no-scrollbar py-0.5">
-                {recentlyRead.map((entry) => (
+            <div className="flex flex-col space-y-1 pb-0.5">
+              <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 h-6">
+                <div className="flex items-center space-x-1.5">
+                  <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{t('library.recentlyRead')}</span>
+                </div>
+                {isEditingRecent && (
                   <button
-                    key={`${entry.seriesId}-${entry.chapterId}`}
-                    onClick={() => onOpenReader({
-                      seriesId: entry.seriesId,
-                      seriesName: entry.seriesName,
-                      volumeId: entry.volumeId,
-                      chapterId: entry.chapterId,
-                      chapterTitle: entry.chapterTitle,
-                      format: entry.format,
-                    })}
-                    className="flex-shrink-0 flex flex-col w-20 bg-zinc-900/70 border border-zinc-800/70 rounded-xl overflow-hidden cursor-pointer hover:border-zinc-600 active:scale-95 transition-all text-left"
+                    type="button"
+                    data-recent-done="true"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsEditingRecent(false);
+                    }}
+                    className="px-2.5 py-0.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-[11px] font-medium transition-all active:scale-95 cursor-pointer animate-fade-in"
                   >
-                    <div className="w-20 h-[4.5rem] relative overflow-hidden bg-zinc-800">
-                      <img
-                        src={kavitaClient.getSeriesCoverUrl(entry.seriesId)}
-                        alt={entry.seriesName}
-                        loading="lazy"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="px-1.5 py-1">
-                      <p className="text-[10px] font-semibold text-white truncate leading-tight">{entry.seriesName}</p>
-                      <p className="text-[9px] text-zinc-500 truncate leading-tight mt-0.5">{entry.chapterTitle}</p>
-                    </div>
+                    {t('common.done')}
                   </button>
-                ))}
+                )}
+              </div>
+              <div
+                className="flex space-x-3 overflow-x-auto no-scrollbar pt-2.5 pb-2.5 px-2 -mx-2"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onTouchCancel={handleTouchCancel}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                {recentlyRead.map((entry) => {
+                  const isDeleting = deletingIds.has(entry.seriesId);
+                  return (
+                    <div
+                      key={`${entry.seriesId}-${entry.chapterId}`}
+                      className={`relative flex-shrink-0 transition-all duration-200 ease-out ${
+                        isDeleting
+                          ? 'w-0 opacity-0 scale-75 -mr-3 overflow-hidden pointer-events-none'
+                          : 'w-20 opacity-100 scale-100'
+                      } ${isEditingRecent && !isDeleting ? 'animate-wiggle' : ''}`}
+                      data-recent-card="true"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleCardClick(entry)}
+                        className={`w-full flex flex-col bg-zinc-900/70 border border-zinc-800/70 rounded-xl overflow-hidden text-left transition-all ${
+                          isEditingRecent
+                            ? 'cursor-default border-zinc-700/80'
+                            : 'cursor-pointer hover:border-zinc-600 active:scale-95'
+                        }`}
+                      >
+                        <div className="w-20 h-[4.5rem] relative overflow-hidden bg-zinc-800 pointer-events-none">
+                          <img
+                            src={kavitaClient.getSeriesCoverUrl(entry.seriesId)}
+                            alt={entry.seriesName}
+                            loading="lazy"
+                            draggable={false}
+                            className="w-full h-full object-cover select-none"
+                          />
+                        </div>
+                        <div className="px-1.5 py-1 pointer-events-none">
+                          <p className="text-[10px] font-semibold text-white truncate leading-tight select-none">
+                            {entry.seriesName}
+                          </p>
+                          <p className="text-[9px] text-zinc-500 truncate leading-tight mt-0.5 select-none">
+                            {entry.chapterTitle}
+                          </p>
+                        </div>
+                      </button>
+
+                      {isEditingRecent && !isDeleting && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteRecent(entry);
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onTouchStart={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 hover:bg-rose-600 text-white rounded-full flex items-center justify-center shadow-md shadow-rose-950/60 cursor-pointer active:scale-90 transition-transform z-20 after:absolute after:-inset-2.5 after:content-['']"
+                          title={t('library.deleteRecent')}
+                          aria-label={t('library.deleteRecent')}
+                        >
+                          <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
