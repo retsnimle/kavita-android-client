@@ -1,7 +1,7 @@
 # Reader for Kavita
 
 <p align="center">
-  <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="108" height="108" alt="Reader for Kavita Logo" />
+  <img src="public/icons/icon_classic.png" width="120" height="120" alt="Reader for Kavita Logo" />
 </p>
 
 <p align="center">
@@ -48,7 +48,11 @@ This app is completely open source under the **MIT License**, built using React,
   - Bidirectional reading progress synchronization ensures your position is automatically updated on your Kavita server.
 
 - **📱 Android-Centric Optimizations**
-  - **Dynamic Launcher Icons**: Switch between classic and modern emblem app icons dynamically.
+  - **Dynamic Launcher Icons**: Switch seamlessly between Classic geometric book and Modern Emblem icons in app settings.
+    <p align="left">
+      <img src="public/icons/icon_classic.png" width="48" height="48" alt="Classic Icon" />&nbsp;&nbsp;&nbsp;&nbsp;
+      <img src="public/icons/icon_emblem.png" width="48" height="48" alt="Emblem Icon" />
+    </p>
   - **Safe-Area Awareness**: Full support for display cutouts, camera notches, and gesture navigation bars.
   - **E-Ink Friendly**: High-contrast modes and discrete page-turning gestures tailored for e-paper devices.
 
