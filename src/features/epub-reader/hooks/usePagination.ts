@@ -107,11 +107,11 @@ export const usePagination = ({
 
       // 直排分頁模式：精確物理邊界裁剪，防止次頁首行或溢出字元半切洩漏
       if (isVertical && doc.body) {
+        const effectiveW = doc.documentElement?.clientWidth || doc.body?.clientWidth || pageWidth;
         const currentOffset = offsets[pageIdx] ?? 0;
         const nextOffset = pageIdx + 1 < offsets.length ? offsets[pageIdx + 1] : undefined;
-        const pageSpan = nextOffset !== undefined ? nextOffset - currentOffset : pageWidth;
-        const clipLeft = Math.max(0, Math.ceil(pageWidth - pageSpan));
-        doc.body.style.transition = animate ? 'clip-path 0.25s cubic-bezier(0.2, 0, 0, 1)' : 'none';
+        const pageSpan = nextOffset !== undefined ? nextOffset - currentOffset : effectiveW;
+        const clipLeft = Math.max(0, Math.ceil(effectiveW - pageSpan));
         doc.body.style.clipPath = clipLeft > 0 ? `inset(0 0 0 ${clipLeft}px)` : 'none';
       } else if (doc.body) {
         doc.body.style.clipPath = 'none';
@@ -230,13 +230,15 @@ export const usePagination = ({
         for (let i = 0; i < lineDistances.length; i++) {
           const line = lineDistances[i];
           if (line.leftDist > currentStartDist + W) {
-            let nextStartDist = line.rightDist;
-            if (nextStartDist <= currentStartDist) {
-              // 元素寬度超過單頁寬度或起點與當前頁相同時，強制以 W 步進避開死鎖
-              nextStartDist = currentStartDist + W;
+            const snappedRight = Math.floor(line.rightDist);
+            if (snappedRight > currentStartDist) {
+              currentStartDist = snappedRight;
+              offsets.push(currentStartDist);
             }
-            offsets.push(nextStartDist);
-            currentStartDist = nextStartDist;
+            while (line.leftDist > currentStartDist + W) {
+              currentStartDist += W;
+              offsets.push(currentStartDist);
+            }
           }
         }
 
@@ -259,10 +261,11 @@ export const usePagination = ({
           );
           goToVirtualPageRef.current(doc, pageWidth, targetPage, false, false);
         } else if (doc.body) {
+          const effectiveW = doc.documentElement?.clientWidth || doc.body?.clientWidth || pageWidth;
           const currentIdx = virtualPageIndexRef.current;
           const nextOffset = currentIdx + 1 < offsets.length ? offsets[currentIdx + 1] : undefined;
-          const pageSpan = nextOffset !== undefined ? nextOffset - (offsets[currentIdx] ?? 0) : pageWidth;
-          const clipLeft = Math.max(0, Math.ceil(pageWidth - pageSpan));
+          const pageSpan = nextOffset !== undefined ? nextOffset - (offsets[currentIdx] ?? 0) : effectiveW;
+          const clipLeft = Math.max(0, Math.ceil(effectiveW - pageSpan));
           doc.body.style.clipPath = clipLeft > 0 ? `inset(0 0 0 ${clipLeft}px)` : 'none';
         }
 

@@ -817,8 +817,8 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 const doc = getIframeDoc();
-                const w = iframeRef.current?.clientWidth || window.innerWidth;
                 if (!doc) return;
+                const w = doc.documentElement?.clientWidth || iframeRef.current?.clientWidth || window.innerWidth;
                 if (isVertical) {
                   turnPage(doc, w, 'next');
                 } else {
@@ -840,8 +840,8 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 const doc = getIframeDoc();
-                const w = iframeRef.current?.clientWidth || window.innerWidth;
                 if (!doc) return;
+                const w = doc.documentElement?.clientWidth || iframeRef.current?.clientWidth || window.innerWidth;
                 if (isVertical) {
                   turnPage(doc, w, 'prev');
                 } else {
