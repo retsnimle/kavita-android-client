@@ -146,8 +146,14 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
   );
 
   const handleReportProgress = useCallback(
-    (pageIdx: number, pageWidth: number, doc: Document, totalPages = 1) => {
-      reportPagedProgress(pageIdx, pageWidth, doc, isVertical, totalPages);
+    (
+      pageIdx: number,
+      pageWidth: number,
+      doc: Document,
+      totalPages = 1,
+      pageOffsets?: number[]
+    ) => {
+      reportPagedProgress(pageIdx, pageWidth, doc, isVertical, totalPages, pageOffsets);
     },
     [reportPagedProgress, isVertical]
   );
@@ -158,9 +164,17 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
       pageWidth: number,
       totalPages: number,
       isVert: boolean,
-      targetVirtual: number | 'last' | null
+      targetVirtual: number | 'last' | null,
+      pageOffsets?: number[]
     ) => {
-      return resolveTargetPageFromXPath(doc, pageWidth, totalPages, isVert, targetVirtual);
+      return resolveTargetPageFromXPath(
+        doc,
+        pageWidth,
+        totalPages,
+        isVert,
+        targetVirtual,
+        pageOffsets
+      );
     },
     [resolveTargetPageFromXPath]
   );
@@ -188,7 +202,7 @@ export const EpubReader: React.FC<EpubReaderProps> = ({
     const lineStep = fontSize * lineHeight;
     const availableW = Math.max(100, w - 2 * paddingX);
     const linesPerPage = Math.max(1, Math.floor(availableW / lineStep));
-    return `${linesPerPage * lineStep}px`;
+    return `${Math.floor(linesPerPage * lineStep)}px`;
   }, [layoutMode, isVertical, fontSize, lineHeight, paddingX]);
 
   const [isProgressReady, setIsProgressReady] = useState<boolean>(false);

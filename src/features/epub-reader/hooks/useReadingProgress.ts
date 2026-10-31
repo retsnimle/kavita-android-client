@@ -29,7 +29,8 @@ export interface UseReadingProgressReturn {
     pageWidth: number,
     doc: Document,
     isVertical: boolean,
-    totalPages?: number
+    totalPages?: number,
+    pageOffsets?: number[]
   ) => void;
   reportScrollProgress: (
     top: number,
@@ -40,7 +41,8 @@ export interface UseReadingProgressReturn {
     pageWidth: number,
     totalPages: number,
     isVertical: boolean,
-    targetVirtual: number | 'last' | null
+    targetVirtual: number | 'last' | null,
+    pageOffsets?: number[]
   ) => number;
   resolveScrollTarget: (
     win: Window,
@@ -152,7 +154,14 @@ export const useReadingProgress = ({
 
   // 單欄分頁翻頁時上報當前頁面代表性段落 XPath
   const reportPagedProgress = useCallback(
-    (pageIdx: number, pageWidth: number, doc: Document, isVert: boolean, totalPages = 1) => {
+    (
+      pageIdx: number,
+      pageWidth: number,
+      doc: Document,
+      isVert: boolean,
+      totalPages = 1,
+      pageOffsets?: number[]
+    ) => {
       let currentXPath = '';
       try {
         const wrapperEl = doc.getElementById('kavita-book-wrapper') || doc.body;
@@ -165,8 +174,16 @@ export const useReadingProgress = ({
         });
 
         const wrapperRect = wrapperEl.getBoundingClientRect();
-        const pageStart = pageIdx * pageWidth;
-        const pageEnd = (pageIdx + 1) * pageWidth;
+        const pageStart =
+          isVert && pageOffsets && pageOffsets[pageIdx] !== undefined
+            ? pageOffsets[pageIdx]
+            : pageIdx * pageWidth;
+        const pageEnd =
+          isVert && pageOffsets && pageOffsets[pageIdx + 1] !== undefined
+            ? pageOffsets[pageIdx + 1]
+            : isVert && pageOffsets && pageOffsets[pageIdx] !== undefined
+            ? pageOffsets[pageIdx] + pageWidth
+            : (pageIdx + 1) * pageWidth;
 
         if (isVert) {
           const targetEl =
@@ -261,7 +278,8 @@ export const useReadingProgress = ({
       pageWidth: number,
       totalPages: number,
       isVert: boolean,
-      targetVirtual: number | 'last' | null
+      targetVirtual: number | 'last' | null,
+      pageOffsets?: number[]
     ): number => {
       let targetPage = 0;
       let located = false;
@@ -282,7 +300,18 @@ export const useReadingProgress = ({
             const wrapperBox = wrapperEl.getBoundingClientRect();
             const elBox = el.getBoundingClientRect();
 
-            if (isVert) {
+            if (isVert && pageOffsets && pageOffsets.length > 0) {
+              const visualX = wrapperBox.right - elBox.right;
+              let foundPage = 0;
+              for (let p = 0; p < pageOffsets.length; p++) {
+                if (pageOffsets[p] <= visualX) {
+                  foundPage = p;
+                } else {
+                  break;
+                }
+              }
+              targetPage = Math.min(totalPages - 1, foundPage);
+            } else if (isVert) {
               const visualX = wrapperBox.right - elBox.right;
               targetPage = Math.max(0, Math.floor((visualX + 2) / pageWidth));
             } else {

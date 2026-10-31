@@ -7,13 +7,20 @@ interface UsePaginationProps {
   totalSections: number;
   currentSectionIndex: number;
   onTurnSection: (nextSectionIndex: number, targetVirtual: number | 'last') => void;
-  onReportProgress: (pageIdx: number, pageWidth: number, doc: Document, totalPages?: number) => void;
+  onReportProgress: (
+    pageIdx: number,
+    pageWidth: number,
+    doc: Document,
+    totalPages?: number,
+    pageOffsets?: number[]
+  ) => void;
   onResolveTargetPage: (
     doc: Document,
     pageWidth: number,
     totalPages: number,
     isVertical: boolean,
-    targetVirtual: number | 'last' | null
+    targetVirtual: number | 'last' | null,
+    pageOffsets?: number[]
   ) => number;
 }
 
@@ -24,6 +31,7 @@ export interface UsePaginationReturn {
   setTotalVirtualPages: React.Dispatch<React.SetStateAction<number>>;
   virtualPageIndexRef: React.MutableRefObject<number>;
   totalVirtualPagesRef: React.MutableRefObject<number>;
+  pageOffsetsRef: React.MutableRefObject<number[]>;
   goToVirtualPage: (
     doc: Document,
     pageWidth: number,
@@ -60,10 +68,11 @@ export const usePagination = ({
   const totalVirtualPagesRef = useRef<number>(1);
 
   const onTurnSectionRef = useRef(onTurnSection);
-  onTurnSectionRef.current = onTurnSection;
   const onReportProgressRef = useRef(onReportProgress);
-  onReportProgressRef.current = onReportProgress;
   const onResolveTargetPageRef = useRef(onResolveTargetPage);
+
+  onTurnSectionRef.current = onTurnSection;
+  onReportProgressRef.current = onReportProgress;
   onResolveTargetPageRef.current = onResolveTargetPage;
 
   const pageOffsetsRef = useRef<number[]>([0]);
@@ -79,8 +88,9 @@ export const usePagination = ({
     ) => {
       if (!doc) return;
       const wrapper = doc.getElementById('kavita-book-wrapper');
+      const offsets = pageOffsetsRef.current;
       const offset = isVertical
-        ? (pageOffsetsRef.current[pageIdx] ?? pageIdx * pageWidth)
+        ? (offsets[pageIdx] ?? pageIdx * pageWidth)
         : -pageIdx * pageWidth;
 
       if (wrapper) {
@@ -94,11 +104,30 @@ export const usePagination = ({
           behavior: animate ? 'smooth' : 'auto',
         });
       }
+
+      // 直排分頁模式：精確物理邊界裁剪，防止次頁首行或溢出字元半切洩漏
+      if (isVertical && doc.body) {
+        const currentOffset = offsets[pageIdx] ?? 0;
+        const nextOffset = pageIdx + 1 < offsets.length ? offsets[pageIdx + 1] : undefined;
+        const pageSpan = nextOffset !== undefined ? nextOffset - currentOffset : pageWidth;
+        const clipLeft = Math.max(0, Math.ceil(pageWidth - pageSpan));
+        doc.body.style.transition = animate ? 'clip-path 0.25s cubic-bezier(0.2, 0, 0, 1)' : 'none';
+        doc.body.style.clipPath = clipLeft > 0 ? `inset(0 0 0 ${clipLeft}px)` : 'none';
+      } else if (doc.body) {
+        doc.body.style.clipPath = 'none';
+      }
+
       virtualPageIndexRef.current = pageIdx;
       setVirtualPageIndex(pageIdx);
 
       if (reportProgress) {
-        onReportProgressRef.current(pageIdx, pageWidth, doc, totalVirtualPagesRef.current);
+        onReportProgressRef.current(
+          pageIdx,
+          pageWidth,
+          doc,
+          totalVirtualPagesRef.current,
+          pageOffsetsRef.current
+        );
       }
     },
     [isVertical]
@@ -150,11 +179,11 @@ export const usePagination = ({
       const wrapper = doc.getElementById('kavita-book-wrapper') || doc.body;
 
       if (isVertical) {
-        // 直排：基於真實文字行物理邊界的 Line Snap Paging Engine
+        // 直排：基於真實文字與區塊元素物理邊界的 Line Snap Paging Engine
         const oldTransform = wrapper.style.transform;
         wrapper.style.transform = 'none';
 
-        const W = pageWidth;
+        const W = Math.floor(pageWidth);
         const wrapperRect = wrapper.getBoundingClientRect();
         const baseRight = wrapperRect.right;
 
@@ -182,6 +211,17 @@ export const usePagination = ({
           }
         }
 
+        // 納入非純文字區塊元素（如圖片、SVG、表格、分隔線）之物理邊界
+        const blockMedia = wrapper.querySelectorAll('img, svg, video, hr, table');
+        for (let i = 0; i < blockMedia.length; i++) {
+          const r = blockMedia[i].getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            const rightDist = Math.max(0, baseRight - r.right);
+            const leftDist = Math.max(0, baseRight - r.left);
+            lineDistances.push({ rightDist, leftDist, width: r.width });
+          }
+        }
+
         lineDistances.sort((a, b) => a.rightDist - b.rightDist);
 
         const offsets: number[] = [0];
@@ -190,11 +230,13 @@ export const usePagination = ({
         for (let i = 0; i < lineDistances.length; i++) {
           const line = lineDistances[i];
           if (line.leftDist > currentStartDist + W) {
-            const nextStartDist = line.rightDist;
-            if (nextStartDist > currentStartDist) {
-              offsets.push(nextStartDist);
-              currentStartDist = nextStartDist;
+            let nextStartDist = line.rightDist;
+            if (nextStartDist <= currentStartDist) {
+              // 元素寬度超過單頁寬度或起點與當前頁相同時，強制以 W 步進避開死鎖
+              nextStartDist = currentStartDist + W;
             }
+            offsets.push(nextStartDist);
+            currentStartDist = nextStartDist;
           }
         }
 
@@ -212,9 +254,16 @@ export const usePagination = ({
             W,
             pages,
             isVertical,
-            targetVirtual
+            targetVirtual,
+            offsets
           );
           goToVirtualPageRef.current(doc, pageWidth, targetPage, false, false);
+        } else if (doc.body) {
+          const currentIdx = virtualPageIndexRef.current;
+          const nextOffset = currentIdx + 1 < offsets.length ? offsets[currentIdx + 1] : undefined;
+          const pageSpan = nextOffset !== undefined ? nextOffset - (offsets[currentIdx] ?? 0) : pageWidth;
+          const clipLeft = Math.max(0, Math.ceil(pageWidth - pageSpan));
+          doc.body.style.clipPath = clipLeft > 0 ? `inset(0 0 0 ${clipLeft}px)` : 'none';
         }
 
         const wrapperEl = doc.getElementById('kavita-book-wrapper');
@@ -269,6 +318,7 @@ export const usePagination = ({
     setTotalVirtualPages,
     virtualPageIndexRef,
     totalVirtualPagesRef,
+    pageOffsetsRef,
     goToVirtualPage,
     turnPage,
     calculatePages,
