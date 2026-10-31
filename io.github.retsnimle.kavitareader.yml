@@ -5,7 +5,7 @@ AuthorName: retsnimle
 SourceCode: https://github.com/retsnimle/kavita-android-client
 IssueTracker: https://github.com/retsnimle/kavita-android-client/issues
 
-AutoName: Reader for Kavita
+AutoName: KaviReader
 RepoType: git
 Repo: https://github.com/retsnimle/kavita-android-client.git
 

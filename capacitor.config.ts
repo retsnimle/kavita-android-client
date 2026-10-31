@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'io.github.retsnimle.kavitareader',
-  appName: 'Reader for Kavita',
+  appName: 'KaviReader',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

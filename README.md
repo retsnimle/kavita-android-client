@@ -1,7 +1,7 @@
-# Reader for Kavita
+# KaviReader
 
 <p align="center">
-  <img src="public/icons/icon_classic.png" width="120" height="120" alt="Reader for Kavita Logo" />
+  <img src="public/icons/icon_classic.png" width="120" height="120" alt="KaviReader Logo" />
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
 
 ## 📖 Overview
 
-**Reader for Kavita** is a dedicated Android companion client engineered specifically for [Kavita](https://www.kavitareader.com/) media servers. While Kavita provides an excellent web application, reading on mobile and e-ink devices benefits immensely from a native container designed around touch gestures, edge-to-edge full-screen reading, hardware volume-key navigation, and offline chapter caching.
+**KaviReader** is a dedicated Android companion client engineered specifically for [Kavita](https://www.kavitareader.com/) media servers. While Kavita provides an excellent web application, reading on mobile and e-ink devices benefits immensely from a native container designed around touch gestures, edge-to-edge full-screen reading, hardware volume-key navigation, and offline chapter caching.
 
 This app is completely open source under the **MIT License**, built using React, Vite, Tailwind CSS, and Capacitor, and adheres strictly to F-Droid's inclusion policies with **zero ads, zero tracking, and zero proprietary analytics**.
 
@@ -65,7 +65,7 @@ This app is completely open source under the **MIT License**, built using React,
 ## 📲 Installation
 
 ### F-Droid
-Reader for Kavita is currently undergoing official packaging review in the F-Droid main repository:
+KaviReader is currently undergoing official packaging review in the F-Droid main repository:
 - **Merge Request**: [fdroid/fdroiddata!55127](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55127)
 - **Application ID**: `io.github.retsnimle.kavitareader`
 
@@ -131,7 +131,7 @@ Contributions, bug reports, and feature requests are very welcome!
 
 ## ⚖️ Disclaimer
 
-**Reader for Kavita** is an independent, community-driven open-source project and is not officially affiliated with, endorsed by, or sponsored by the Kavita Core development team. The official Kavita project can be found at [kavitareader.com](https://www.kavitareader.com/).
+**KaviReader** is an independent, community-driven open-source project and is not officially affiliated with, endorsed by, or sponsored by the Kavita Core development team. The official Kavita project can be found at [kavitareader.com](https://www.kavitareader.com/).
 
 ---
 
